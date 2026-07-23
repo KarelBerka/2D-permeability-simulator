@@ -320,33 +320,27 @@ class PhysicsEngine {
       this.u.set(this.unext);
     }
 
-    // High Speedup analytical spatial relaxation leap
-    if (speed >= 1200) {
-      const dtLeap = actualSimulatedTimeStep * (speed / 100.0);
+    // High Speedup analytical spatial relaxation leap for speedup presets (speed >= 1.5)
+    if (speed >= 1.5) {
+      const dtLeap = actualSimulatedTimeStep * speed;
       this.applySmoothRelaxationLeap(dtLeap);
     }
 
     this.updateConcentrationFromPotential();
     this.updateParticles(actualSimulatedTimeStep);
     this.recordFluxMetrics();
-    this.time += actualSimulatedTimeStep;
+    this.time += actualSimulatedTimeStep * (speed >= 1.5 ? speed : 1.0);
   }
 
   applySmoothRelaxationLeap(dtLeap) {
     const nx = this.nx;
     const ny = this.ny;
     const { memStart, memEnd } = this;
-    const { order, fluidity, thicknessNm, partitionK, dBase, radiusNm } = this.params;
+    const metrics = this.getCalculatedMetrics();
+    const P = metrics.P_val || 1e-4;
 
-    // Calculate physical permeability P = K * D_mem / d
-    const radRatio = 0.70 / Math.max(0.10, radiusNm);
-    const dWaterEff = dBase * radRatio;
-    const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const dMem = dWaterEff * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6);
-    const P = (partitionK * dMem) / Math.max(0.1, thicknessNm * 0.1);
-
-    // Permeability accumulation rate directly proportional to Partition Coefficient K and P
-    const permRate = P * 0.015;
+    // Permeability accumulation rate calibrated to physical permeability P
+    const permRate = P * 0.8;
 
     // Smooth exponential relaxation towards steady-state linear profile
     for (let y = 0; y < ny; y++) {
@@ -377,7 +371,7 @@ class PhysicsEngine {
           targetU = cDonor + frac * (currRec - cDonor);
         }
 
-        const alpha = 1.0 - Math.exp(-Math.min(2.0, permRate * dtLeap * 2.0));
+        const alpha = 1.0 - Math.exp(-Math.min(3.0, permRate * dtLeap * 2.5));
         const newU = this.u[idx] + alpha * (targetU - this.u[idx]);
         this.u[idx] = Number.isFinite(newU) ? Math.max(0, Math.min(5.0, newU)) : 0;
       }
