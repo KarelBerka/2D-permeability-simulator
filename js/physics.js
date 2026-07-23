@@ -135,9 +135,9 @@ class PhysicsEngine {
     const dMemCm2s = (baseD * radRatio * tempFactor * 1e-5) * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
     const P = (partitionK * dMemCm2s) / Math.max(1e-8, this.params.thicknessNm * 1e-7); // cm/s
 
-    // Exact physical grid permeability mapping (Fast, responsive 2D simulation)
-    const dWaterGrid = 4.0; // Fast aqueous mixing across water chambers
-    const dMemGrid = Math.max(0.08, Math.min(2.5, P * 600.0)); // Responsive physical permeation across lipid membrane
+    // Responsive grid permeability mapping for fast, realistic 2D interactive visual simulation
+    const dWaterGrid = 8.0; // Rapid aqueous mixing across water chambers
+    const dMemGrid = Math.max(0.20, Math.min(6.0, P * 5000.0)); // Responsive physical permeation across lipid membrane
 
     const channelYStart = Math.floor(this.ny * 0.42);
     const channelYEnd = Math.floor(this.ny * 0.58);
@@ -267,26 +267,37 @@ class PhysicsEngine {
     const ny = this.ny;
 
     const speed = Math.max(0.1, this.params.speedMultiplier);
-    // Physical time step per frame (e.g. 1/30s at 1s/s, 0.33s at 10s/s, 2s at 1m/s, 120s at 1h/s)
+    // Physical time step per frame
     const dtFrame = (1 / 30.0) * speed;
 
-    // Execute 8 substeps per frame for smooth & fast 2D PDE numerical integration
-    const numSubsteps = 8;
+    // Adaptive substeps scaling with time speedup (12 to 96 substeps)
+    const numSubsteps = Math.min(96, Math.max(12, Math.round(12 * Math.pow(speed, 0.30))));
     const dtSub = dtFrame / numSubsteps;
 
     for (let step = 0; step < numSubsteps; step++) {
-      for (let y = 0; y < ny; y++) {
-        const yAbove = (y > 0) ? y - 1 : y; // Neumann no-flux boundary top/bottom
+      // Alternating 2-way Gauss-Seidel directional sweeps (forward and backward)
+      const forward = (step % 2 === 0);
+
+      const yStart = forward ? 0 : ny - 1;
+      const yEnd = forward ? ny : -1;
+      const yStep = forward ? 1 : -1;
+
+      const xStart = forward ? 0 : nx - 1;
+      const xEnd = forward ? nx : -1;
+      const xStep = forward ? 1 : -1;
+
+      for (let y = yStart; y !== yEnd; y += yStep) {
+        const yAbove = (y > 0) ? y - 1 : y;
         const yBelow = (y < ny - 1) ? y + 1 : y;
 
-        for (let x = 0; x < nx; x++) {
+        for (let x = xStart; x !== xEnd; x += xStep) {
           const idx = y * nx + x;
 
           if (this.mask[idx] === 0) {
-            this.unext[idx] = 1.0;
+            this.u[idx] = 1.0;
             continue;
           } else if (this.mask[idx] === 1) {
-            this.unext[idx] = 0.0;
+            this.u[idx] = 0.0;
             continue;
           }
 
@@ -302,10 +313,7 @@ class PhysicsEngine {
           const D_B = 2.0 * Dcenter * this.Dmap[yBelow * nx + x] / (Dcenter + this.Dmap[yBelow * nx + x] + 1e-6);
 
           const totalD = D_L + D_R + D_A + D_B;
-          if (totalD < 1e-8) {
-            this.unext[idx] = uCenter;
-            continue;
-          }
+          if (totalD < 1e-8) continue;
 
           // Weighted average potential of 4-connected neighbors
           const targetU = (D_L * this.u[y * nx + xLeft] +
@@ -313,14 +321,12 @@ class PhysicsEngine {
                            D_A * this.u[yAbove * nx + x] +
                            D_B * this.u[yBelow * nx + x]) / totalD;
 
-          // Exponential Euler relaxation decay factor: 1 - exp(-totalD * dtSub)
-          // Unconditionally stable (0 <= decay <= 1), ZERO numerical oscillations at high speedup!
+          // Exponential Euler relaxation decay factor
           const decay = 1.0 - Math.exp(-totalD * dtSub);
           const val = uCenter + decay * (targetU - uCenter);
-          this.unext[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
+          this.u[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
         }
       }
-      this.u.set(this.unext);
     }
 
     this.updateConcentrationFromPotential();
@@ -409,30 +415,30 @@ class PhysicsEngine {
     // 1. Compute 1D average concentration profile C_1D[x]
     const c1D = this.getProfile1D();
 
-    // 2. Count existing particles per grid column x
-    const particlesPerColumn = new Uint16Array(nx);
+    // 2. Map existing particles to grid columns
+    const colParticles = Array.from({ length: nx }, () => []);
     const numParticles = this.particles.length;
 
     for (let i = 0; i < numParticles; i++) {
       const p = this.particles[i];
       if (!p) continue;
       const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
-      particlesPerColumn[gx]++;
+      colParticles[gx].push(p);
     }
 
-    // 3. Exact column-by-column target scaling: 5.5 particles per unit concentration
-    const scaleFactor = 5.5;
-    let needsFilter = false;
+    // 3. Target scaling per column, capped at total maxParticles
+    const scaleFactor = 3.5;
+    const maxAllowed = this.maxParticles || 500;
 
     for (let x = 2; x < nx - 2; x++) {
       const targetInCol = Math.round(c1D[x] * scaleFactor);
-      const currentInCol = particlesPerColumn[x];
+      const currentInCol = colParticles[x].length;
 
-      if (currentInCol < targetInCol) {
-        const needed = targetInCol - currentInCol;
+      if (currentInCol < targetInCol && this.particles.length < maxAllowed) {
+        const needed = Math.min(targetInCol - currentInCol, maxAllowed - this.particles.length);
         for (let k = 0; k < needed; k++) {
           let ry = Math.floor(Math.random() * ny);
-          for (let attempt = 0; attempt < 5; attempt++) {
+          for (let attempt = 0; attempt < 4; attempt++) {
             const testY = Math.floor(Math.random() * ny);
             if (Math.random() < Math.min(1.0, this.C[testY * nx + x] + 0.1)) {
               ry = testY;
@@ -450,19 +456,15 @@ class PhysicsEngine {
         }
       } else if (currentInCol > targetInCol + 1) {
         let toRemove = currentInCol - targetInCol;
-        for (let i = numParticles - 1; i >= 0 && toRemove > 0; i--) {
-          const p = this.particles[i];
-          if (p && Math.floor(p.x) === x) {
-            this.particles[i] = null;
-            toRemove--;
-            needsFilter = true;
-          }
+        const list = colParticles[x];
+        for (let k = 0; k < toRemove && k < list.length; k++) {
+          list[k]._markedForRemoval = true;
         }
       }
     }
 
-    if (needsFilter) {
-      this.particles = this.particles.filter(p => p !== null);
+    if (this.particles.some(p => p._markedForRemoval)) {
+      this.particles = this.particles.filter(p => !p._markedForRemoval);
     }
   }
 

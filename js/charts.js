@@ -286,7 +286,7 @@ class ChartEngine {
     ctx.font = '600 10px Inter, sans-serif';
     ctx.fillStyle = 'rgba(0, 242, 254, 0.9)';
     ctx.textAlign = 'center';
-    ctx.fillText(`Total Time: ${this.formatTimeScale(endTime, endTime)}`, padL + plotW / 2, h - 2);
+    ctx.fillText(`Total Time: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 2);
 
     ctx.restore();
   }
