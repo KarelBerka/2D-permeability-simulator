@@ -239,9 +239,6 @@ class PhysicsEngine {
       this.params.order = 0.20;
       this.params.fluidity = 0.85;
     } else if (preset === 'transmembrane_channel') {
-      this.params.hasChannel = true;
-    }
-
     this.updateMembraneGeometry();
     this.rebuildDiffusionMap();
     this.initParticles();
@@ -249,21 +246,7 @@ class PhysicsEngine {
 
   initParticles() {
     this.particles = [];
-    // Spawn particles in areas with non-zero concentration (half density: 175)
-    for (let i = 0; i < 175; i++) {
-      const px = Math.random() * (this.memStart - 4) + 2;
-      const py = Math.random() * (this.ny - 4) + 2;
-      this.particles.push({
-        x: px,
-        y: py,
-        vx: (Math.random() - 0.5) * 0.2,
-        vy: (Math.random() - 0.5) * 0.2,
-        angle: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 0.2,
-        radius: 3.5,
-        color: '#00f2fe'
-      });
-    }
+    this.syncParticlePopulationWithConcentration();
   }
 
   step(userSubsteps = 2) {
@@ -331,27 +314,20 @@ class PhysicsEngine {
         }
       }
 
-      // Copy buffer back into potential array u
-      for (let i = 0; i < nx * ny; i++) {
-        if (this.mask[i] === -1) {
-          this.u[i] = Number.isFinite(this.Cnext[i]) ? this.Cnext[i] : 0;
-        }
-      }
-
-      this.updateConcentrationFromPotential();
-      this.updateParticles(dtSub * Math.min(speed, 5.0));
-      this.time += dtSub;
+      // Copy buffer back to C
+      this.C.set(this.Cnext);
     }
 
-    // 3. For ultra-high rates (speed > 60s/s), perform smooth spatial steady-state relaxation leap
-    if (targetFrameDt > actualSimulatedTimeStep) {
-      const remainingDt = targetFrameDt - actualSimulatedTimeStep;
-      this.applySmoothRelaxationLeap(remainingDt);
-      this.time += remainingDt;
+    // High Speedup analytical spatial relaxation leap
+    if (speed >= 1200) {
+      const dtLeap = actualSimulatedTimeStep * (speed / 100.0);
+      this.applySmoothRelaxationLeap(dtLeap);
     }
 
-    // Record flux metrics into right reservoir
+    this.updateConcentrationFromPotential();
+    this.updateParticles(actualSimulatedTimeStep);
     this.recordFluxMetrics();
+    this.time += actualSimulatedTimeStep;
   }
 
   applySmoothRelaxationLeap(dtLeap) {
@@ -419,11 +395,7 @@ class PhysicsEngine {
     const dWaterEff = (dBase || 1.0) * radRatio;
 
     for (let p of this.particles) {
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
-        p.x = Math.random() * (this.memStart - 4) + 2;
-        p.y = Math.random() * (ny - 4) + 2;
-        p.angle = Math.random() * Math.PI * 2;
-      }
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
 
       p.angle = (p.angle || 0) + (p.rotSpeed || 0.1) * dt * 5.0 + (Math.random() - 0.5) * 0.08;
 
@@ -463,12 +435,10 @@ class PhysicsEngine {
       // Membrane -> Water: Exit probability = min(1.0, 1.0 / K)
       if (!isMembrane && nextIsMembrane && !isChannel) {
         if (Math.random() > Math.min(1.0, partitionK)) {
-          // Reflection off hydrophobic barrier (Low K)
           nextX = p.x - dx * 0.6;
         }
       } else if (isMembrane && !nextIsMembrane && !isChannel) {
         if (Math.random() > Math.min(1.0, 1.0 / Math.max(0.01, partitionK))) {
-          // Trapping inside lipophilic core (High K)
           nextX = p.x - dx * 0.6;
         }
       }
@@ -485,64 +455,60 @@ class PhysicsEngine {
     const nx = this.nx;
     const ny = this.ny;
 
-    // Calculate total integrated solute concentration in domain
-    let totalMass = 0;
-    for (let i = 0; i < nx * ny; i++) {
-      totalMass += this.C[i];
+    // 1. Compute 1D average concentration profile C_1D[x]
+    const c1D = this.getProfile1D();
+
+    // 2. Count existing particles per grid column x
+    const particlesPerColumn = new Array(nx).fill(0);
+    const particleIndicesPerColumn = Array.from({ length: nx }, () => []);
+
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (!p) continue;
+      const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
+      particlesPerColumn[gx]++;
+      particleIndicesPerColumn[gx].push(i);
     }
 
-    // Target particle count scaled to half (50% density reduction: 20 to 500 max)
-    const targetCount = Math.max(20, Math.min(500, Math.round(totalMass * 3.75)));
+    // 3. Exact column-by-column target scaling: 5.5 particles per unit concentration
+    const scaleFactor = 5.5;
 
-    if (this.particles.length < targetCount) {
-      const needed = targetCount - this.particles.length;
-      for (let k = 0; k < needed; k++) {
-        let spawned = false;
-        for (let attempt = 0; attempt < 25; attempt++) {
-          const rx = Math.floor(Math.random() * nx);
-          const ry = Math.floor(Math.random() * ny);
-          const idx = ry * nx + rx;
-          const cVal = this.C[idx];
+    for (let x = 0; x < nx; x++) {
+      const targetInCol = Math.round(c1D[x] * scaleFactor);
+      const currentInCol = particlesPerColumn[x];
 
-          if (Math.random() < Math.min(1.0, cVal * 1.5)) {
-            this.particles.push({
-              x: rx + Math.random(),
-              y: ry + Math.random(),
-              angle: Math.random() * Math.PI * 2,
-              rotSpeed: (Math.random() - 0.5) * 0.2,
-              radius: 3.5,
-              color: '#00f2fe'
-            });
-            spawned = true;
-            break;
+      if (currentInCol < targetInCol) {
+        const needed = targetInCol - currentInCol;
+        for (let k = 0; k < needed; k++) {
+          let ry = Math.floor(Math.random() * ny);
+          for (let attempt = 0; attempt < 10; attempt++) {
+            const testY = Math.floor(Math.random() * ny);
+            if (Math.random() < Math.min(1.0, this.C[testY * nx + x] + 0.1)) {
+              ry = testY;
+              break;
+            }
           }
-        }
-        if (!spawned) {
-          const rx = Math.random() * (this.memStart - 4) + 2;
-          const ry = Math.random() * (ny - 4) + 2;
           this.particles.push({
-            x: rx,
-            y: ry,
+            x: x + Math.random(),
+            y: ry + Math.random(),
             angle: Math.random() * Math.PI * 2,
             rotSpeed: (Math.random() - 0.5) * 0.2,
             radius: 3.5,
             color: '#00f2fe'
           });
         }
-      }
-    } else if (this.particles.length > targetCount + 15) {
-      const toRemove = this.particles.length - targetCount;
-      let removed = 0;
-      for (let i = this.particles.length - 1; i >= 0 && removed < toRemove; i--) {
-        const p = this.particles[i];
-        const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
-        const gy = Math.max(0, Math.min(ny - 1, Math.floor(p.y)));
-        const idx = gy * nx + gx;
-        if (this.C[idx] < 0.08 || Math.random() < 0.35) {
-          this.particles.splice(i, 1);
-          removed++;
+      } else if (currentInCol > targetInCol + 1) {
+        const toRemove = currentInCol - targetInCol;
+        const indices = particleIndicesPerColumn[x];
+        for (let k = 0; k < toRemove && indices.length > 0; k++) {
+          const removeIdx = indices.pop();
+          this.particles[removeIdx] = null;
         }
       }
+    }
+
+    if (this.particles.some(p => p === null)) {
+      this.particles = this.particles.filter(p => p !== null);
     }
   }
 
