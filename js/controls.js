@@ -472,33 +472,36 @@ class ControlsManager {
     if (chkChannel) chkChannel.checked = hasChannel;
   }
 
+  cacheMetricsElements() {
+    this.dWatEl = document.getElementById('metric-dwat');
+    this.dMemEl = document.getElementById('metric-dmem');
+    this.pEl = document.getElementById('metric-p');
+    this.pTitleEl = document.getElementById('metric-p-title');
+    this.pUnitEl = document.getElementById('metric-p-unit');
+    this.lagEl = document.getElementById('metric-lag');
+    this.fluxEl = document.getElementById('metric-flux');
+  }
+
   updateMetricsUI() {
+    if (!this.dWatEl) this.cacheMetricsElements();
     const metrics = this.physics.getCalculatedMetrics();
     
-    const dWatEl = document.getElementById('metric-dwat');
-    const dMemEl = document.getElementById('metric-dmem');
-    const pEl = document.getElementById('metric-p');
-    const pTitleEl = document.getElementById('metric-p-title');
-    const pUnitEl = document.getElementById('metric-p-unit');
-    const lagEl = document.getElementById('metric-lag');
-    const fluxEl = document.getElementById('metric-flux');
-
-    if (dWatEl) dWatEl.textContent = metrics.dWaterCm2s;
-    if (dMemEl) dMemEl.textContent = metrics.dMem;
+    if (this.dWatEl) this.dWatEl.textContent = metrics.dWaterCm2s;
+    if (this.dMemEl) this.dMemEl.textContent = metrics.dMem;
     
-    if (pEl) {
+    if (this.pEl) {
       if (this.isLogPMode) {
-        if (pTitleEl) pTitleEl.innerHTML = 'Log Permeability (<i>log<sub>10</sub>P</i> &plusmn; &sigma;)';
-        pEl.textContent = metrics.logP_str;
-        if (pUnitEl) pUnitEl.textContent = 'log10(cm/s)';
+        if (this.pTitleEl) this.pTitleEl.innerHTML = 'Log Permeability (<i>log<sub>10</sub>P</i> &plusmn; &sigma;)';
+        this.pEl.textContent = metrics.logP_str;
+        if (this.pUnitEl) this.pUnitEl.textContent = 'log10(cm/s)';
       } else {
-        if (pTitleEl) pTitleEl.innerHTML = 'Permeability (<i>P</i> &plusmn; &sigma;)';
-        pEl.textContent = metrics.P_str;
-        if (pUnitEl) pUnitEl.textContent = 'cm/s';
+        if (this.pTitleEl) this.pTitleEl.innerHTML = 'Permeability (<i>P</i> &plusmn; &sigma;)';
+        this.pEl.textContent = metrics.P_str;
+        if (this.pUnitEl) this.pUnitEl.textContent = 'cm/s';
       }
     }
 
-    if (lagEl) lagEl.textContent = metrics.lagTime;
-    if (fluxEl) fluxEl.textContent = metrics.steadyStateFlux;
+    if (this.lagEl) this.lagEl.textContent = metrics.lagTime;
+    if (this.fluxEl) this.fluxEl.textContent = metrics.steadyStateFlux;
   }
 }

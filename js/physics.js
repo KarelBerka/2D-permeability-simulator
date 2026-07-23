@@ -270,8 +270,8 @@ class PhysicsEngine {
     // Physical time step per frame (e.g. 1/30s at 1s/s, 0.33s at 10s/s, 2s at 1m/s, 120s at 1h/s)
     const dtFrame = (1 / 30.0) * speed;
 
-    // Execute 20 substeps per frame for smooth 2D PDE numerical integration
-    const numSubsteps = 20;
+    // Execute 8 substeps per frame for smooth & fast 2D PDE numerical integration
+    const numSubsteps = 8;
     const dtSub = dtFrame / numSubsteps;
 
     for (let step = 0; step < numSubsteps; step++) {

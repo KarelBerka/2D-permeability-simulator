@@ -52,12 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Main animation frame loop
+  let frameCounter = 0;
   function loop(currentTime) {
     try {
       if (isRunning) {
         physics.step(2);
         charts.update();
-        controls.updateMetricsUI();
+        frameCounter++;
+        if (frameCounter % 6 === 0) {
+          controls.updateMetricsUI();
+        }
       }
 
       render.render();
