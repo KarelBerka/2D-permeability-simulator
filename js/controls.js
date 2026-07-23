@@ -49,6 +49,11 @@ const PARAM_INFO_DICTIONARY = {
     text: 'Thermodynamic equilibrium ratio of solute concentration inside hydrophobic lipid core relative to water (Overton\'s Rule).',
     impact: 'Lipophilic compounds (K > 1) dissolve strongly into lipid core, creating high concentration gradient and accelerating steady-state flux J_ss.'
   },
+  'solute-conc': {
+    title: 'Donor Initial Concentration (C\u2080)',
+    text: 'Sets the initial solute concentration in the donor (left) compartment (0.1 to 5.0 mM).',
+    impact: 'According to Fick\'s First Law of Diffusion (J = P \u00B7 \u0394C), higher donor concentration creates a steeper concentration gradient across the membrane, driving higher molar flux J per unit time and scaling displayed particle population density.'
+  },
   'channel': {
     title: 'Transmembrane Pore Channel',
     text: 'Inserts an aqueous protein pore across the hydrophobic lipid membrane slab.',
@@ -211,6 +216,11 @@ class ControlsManager {
       this.physics.params.manualRadiusOverride = true;
       this.physics.rebuildDiffusionMap();
     }, (val) => `${parseFloat(val).toFixed(2)} nm`);
+
+    this.bindSlider('slider-solute-conc', 'val-solute-conc', (val) => {
+      this.physics.params.initialConc = parseFloat(val);
+      this.physics.resetScenario();
+    }, (val) => `${parseFloat(val).toFixed(1)} mM`);
 
     // Temperature Control Slider
     this.bindSlider('slider-temp', 'val-temp', (val) => {
@@ -416,7 +426,7 @@ class ControlsManager {
   }
 
   syncSlidersFromPhysics() {
-    const { order, fluidity, thicknessNm, partitionK, dBase, radiusNm, mwDa, soluteType, soluteShape, aspectRatio, tempC, hasChannel } = this.physics.params;
+    const { order, fluidity, thicknessNm, partitionK, initialConc, dBase, radiusNm, mwDa, soluteType, soluteShape, aspectRatio, tempC, hasChannel } = this.physics.params;
 
     const setVal = (id, badgeId, val, formatted) => {
       const slider = document.getElementById(id);
@@ -428,8 +438,10 @@ class ControlsManager {
     const p = aspectRatio || 1.0;
     const shape = soluteShape || 'sphere';
     const fShape = this.physics.getPerrinShapeFactor(shape, p);
+    const conc = initialConc !== undefined ? initialConc : 1.0;
 
     setVal('slider-radius', 'val-radius', radiusNm, `${radiusNm.toFixed(2)} nm`);
+    setVal('slider-solute-conc', 'val-solute-conc', conc, `${conc.toFixed(1)} mM`);
     setVal('slider-aspect', 'val-aspect', p, p <= 1.05 ? '1.0 (Sphere)' : `${p.toFixed(1)} (${shape === 'rod' ? 'Rod' : 'Disc'})`);
     setVal('slider-temp', 'val-temp', tempC || 37.0, `${(tempC || 37.0).toFixed(1)} \u00B0C (${((tempC || 37.0) + 273.15).toFixed(2)} K)`);
     setVal('slider-order', 'val-order', order, order.toFixed(2));

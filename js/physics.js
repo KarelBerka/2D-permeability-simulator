@@ -29,6 +29,7 @@ class PhysicsEngine {
       fluidity: 0.55,       // POPC Membrane Fluidity eta (0.55 lateral mobility)
       thicknessNm: 3.9,     // POPC Hydrophobic Core Thickness (3.9 nm)
       partitionK: 3.05,     // Ibuprofen MolMeDB MM00045 membrane partition K = 3.05
+      initialConc: 1.0,     // Initial Donor Concentration C0 (mM)
       dBase25C: 2.30,       // Base water self-diffusion D_0 at 25°C (2.30e-5 cm²/s = 2.30e-9 m²/s)
       dBase: 2.30,          // Backward compatibility alias
       soluteType: 'ibuprofen', // 'water', 'ion', 'small_organic', 'ibuprofen', 'drug', 'macrocycle', 'biopolymer'
@@ -207,13 +208,15 @@ class PhysicsEngine {
     this.u.fill(0);
     this.mask.fill(-1);
 
+    const c0 = this.params.initialConc !== undefined ? this.params.initialConc : 1.0;
+
     if (preset === 'default' || preset === 'lipophilic' || preset === 'hydrophilic' || preset === 'ordered_gel' || preset === 'fluid_disordered' || preset === 'transmembrane_channel') {
-      // Left reservoir filled with high concentration (1.0), right reservoir empty (0.0)
+      // Left reservoir filled with donor concentration C0
       for (let y = 0; y < this.ny; y++) {
         for (let x = 0; x < this.memStart; x++) {
           const idx = y * this.nx + x;
-          this.C[idx] = 1.0;
-          this.u[idx] = 1.0;
+          this.C[idx] = c0;
+          this.u[idx] = c0;
         }
       }
     } else if (preset === 'pulse_wave') {
@@ -222,8 +225,8 @@ class PhysicsEngine {
       for (let y = 0; y < this.ny; y++) {
         for (let x = 5; x < 5 + waveWidth; x++) {
           const idx = y * this.nx + x;
-          this.C[idx] = 1.0;
-          this.u[idx] = 1.0;
+          this.C[idx] = c0;
+          this.u[idx] = c0;
         }
       }
     }
@@ -380,9 +383,14 @@ class PhysicsEngine {
         }
       }
 
-      // Boundary checks
-      p.x = Math.max(1, Math.min(nx - 2, nextX));
-      p.y = Math.max(1, Math.min(ny - 2, nextY));
+      // Specular elastic boundary reflection (prevents sticking to outer walls)
+      if (nextX < 1.5) nextX = 1.5 + (1.5 - nextX);
+      if (nextX > nx - 2.5) nextX = (nx - 2.5) - (nextX - (nx - 2.5));
+      if (nextY < 1.5) nextY = 1.5 + (1.5 - nextY);
+      if (nextY > ny - 2.5) nextY = (ny - 2.5) - (nextY - (ny - 2.5));
+
+      p.x = Math.max(1.5, Math.min(nx - 2.5, nextX));
+      p.y = Math.max(1.5, Math.min(ny - 2.5, nextY));
     }
 
     this.syncParticlePopulationWithConcentration();
@@ -410,7 +418,7 @@ class PhysicsEngine {
     // 3. Exact column-by-column target scaling: 5.5 particles per unit concentration
     const scaleFactor = 5.5;
 
-    for (let x = 0; x < nx; x++) {
+    for (let x = 2; x < nx - 2; x++) {
       const targetInCol = Math.round(c1D[x] * scaleFactor);
       const currentInCol = particlesPerColumn[x];
 
@@ -426,8 +434,8 @@ class PhysicsEngine {
             }
           }
           this.particles.push({
-            x: x + Math.random(),
-            y: ry + Math.random(),
+            x: x + 0.1 + Math.random() * 0.8,
+            y: ry + 0.1 + Math.random() * 0.8,
             angle: Math.random() * Math.PI * 2,
             rotSpeed: (Math.random() - 0.5) * 0.2,
             radius: 3.5,
