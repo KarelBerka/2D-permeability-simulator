@@ -158,7 +158,7 @@ class ControlsManager {
       water:        { mw: 18,   radius: 0.15, partitionK: 0.20, shape: 'sphere', aspect: 1.0 },
       ion:          { mw: 30,   radius: 0.25, partitionK: 0.05, shape: 'sphere', aspect: 1.0 },
       small_organic:{ mw: 100,  radius: 0.40, partitionK: 0.80, shape: 'sphere', aspect: 1.0 },
-      ibuprofen:    { mw: 206,  radius: 0.45, partitionK: 3.50, shape: 'disc',   aspect: 2.4 }, // MolMeDB MM00045
+      ibuprofen:    { mw: 206,  radius: 0.45, partitionK: 3.05, shape: 'disc',   aspect: 2.4 }, // MolMeDB MM00045
       drug:         { mw: 300,  radius: 0.70, partitionK: 1.20, shape: 'sphere', aspect: 1.0 },
       macrocycle:   { mw: 1000, radius: 1.20, partitionK: 2.20, shape: 'disc',   aspect: 1.8 },
       biopolymer:   { mw: 3000, radius: 2.00, partitionK: 0.10, shape: 'rod',    aspect: 3.5 }
@@ -459,6 +459,7 @@ class ControlsManager {
   updateMetricsUI() {
     const metrics = this.physics.getCalculatedMetrics();
     
+    const dWatEl = document.getElementById('metric-dwat');
     const dMemEl = document.getElementById('metric-dmem');
     const pEl = document.getElementById('metric-p');
     const pTitleEl = document.getElementById('metric-p-title');
@@ -466,6 +467,7 @@ class ControlsManager {
     const lagEl = document.getElementById('metric-lag');
     const fluxEl = document.getElementById('metric-flux');
 
+    if (dWatEl) dWatEl.textContent = metrics.dWaterCm2s;
     if (dMemEl) dMemEl.textContent = metrics.dMem;
     
     if (pEl) {

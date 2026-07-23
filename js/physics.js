@@ -27,7 +27,7 @@ class PhysicsEngine {
       order: 0.60,          // POPC Lipid Order parameter S (0.60 at 37°C, L_alpha phase)
       fluidity: 0.55,       // POPC Membrane Fluidity eta (0.55 lateral mobility)
       thicknessNm: 3.9,     // POPC Hydrophobic Core Thickness (3.9 nm)
-      partitionK: 3.50,     // Ibuprofen MolMeDB MM00045 membrane partition K = 3.50
+      partitionK: 3.05,     // Ibuprofen MolMeDB MM00045 membrane partition K = 3.05
       dBase25C: 2.30,       // Base water self-diffusion D_0 at 25°C (2.30e-5 cm²/s = 2.30e-9 m²/s)
       dBase: 2.30,          // Backward compatibility alias
       soluteType: 'ibuprofen', // 'water', 'ion', 'small_organic', 'ibuprofen', 'drug', 'macrocycle', 'biopolymer'
@@ -476,6 +476,73 @@ class PhysicsEngine {
       // Boundary checks
       p.x = Math.max(1, Math.min(nx - 2, nextX));
       p.y = Math.max(1, Math.min(ny - 2, nextY));
+    }
+
+    this.syncParticlePopulationWithConcentration();
+  }
+
+  syncParticlePopulationWithConcentration() {
+    const nx = this.nx;
+    const ny = this.ny;
+
+    // Calculate total integrated solute concentration in domain
+    let totalMass = 0;
+    for (let i = 0; i < nx * ny; i++) {
+      totalMass += this.C[i];
+    }
+
+    // Target particle count proportional to domain concentration mass
+    const targetCount = Math.max(40, Math.min(1000, Math.round(totalMass * 7.5)));
+
+    if (this.particles.length < targetCount) {
+      const needed = targetCount - this.particles.length;
+      for (let k = 0; k < needed; k++) {
+        let spawned = false;
+        for (let attempt = 0; attempt < 25; attempt++) {
+          const rx = Math.floor(Math.random() * nx);
+          const ry = Math.floor(Math.random() * ny);
+          const idx = ry * nx + rx;
+          const cVal = this.C[idx];
+
+          if (Math.random() < Math.min(1.0, cVal * 1.5)) {
+            this.particles.push({
+              x: rx + Math.random(),
+              y: ry + Math.random(),
+              angle: Math.random() * Math.PI * 2,
+              rotSpeed: (Math.random() - 0.5) * 0.2,
+              radius: 3.5,
+              color: '#00f2fe'
+            });
+            spawned = true;
+            break;
+          }
+        }
+        if (!spawned) {
+          const rx = Math.random() * (this.memStart - 4) + 2;
+          const ry = Math.random() * (ny - 4) + 2;
+          this.particles.push({
+            x: rx,
+            y: ry,
+            angle: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 0.2,
+            radius: 3.5,
+            color: '#00f2fe'
+          });
+        }
+      }
+    } else if (this.particles.length > targetCount + 15) {
+      const toRemove = this.particles.length - targetCount;
+      let removed = 0;
+      for (let i = this.particles.length - 1; i >= 0 && removed < toRemove; i--) {
+        const p = this.particles[i];
+        const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
+        const gy = Math.max(0, Math.min(ny - 1, Math.floor(p.y)));
+        const idx = gy * nx + gx;
+        if (this.C[idx] < 0.08 || Math.random() < 0.35) {
+          this.particles.splice(i, 1);
+          removed++;
+        }
+      }
     }
   }
 
