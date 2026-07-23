@@ -257,21 +257,13 @@ class PhysicsEngine {
     const nx = this.nx;
     const ny = this.ny;
 
-    let maxD = 0.1;
-    for (let i = 0; i < nx * ny; i++) {
-      if (this.Dmap[i] > maxD) maxD = this.Dmap[i];
-    }
-
-    const safeDtLimit = 0.15 / Math.max(0.01, maxD);
     const speed = Math.max(0.1, this.params.speedMultiplier);
-    
-    // Physical time step per frame (e.g. 1/30s at 1s/s, 2s at 1m/s, 120s at 1h/s)
-    const frameSimTime = (1 / 30.0) * speed;
+    // Physical time step per frame (e.g. 1/30s at 1s/s, 0.33s at 10s/s, 2s at 1m/s, 120s at 1h/s)
+    const dtFrame = (1 / 30.0) * speed;
 
-    // Sub-stepping for explicit 2D stencil
-    const numSubsteps = Math.min(20, Math.max(userSubsteps, Math.ceil(frameSimTime / safeDtLimit)));
-    const dtSub = Math.min(safeDtLimit, frameSimTime / numSubsteps);
-    const actualExplicitDt = numSubsteps * dtSub;
+    // Execute 20 substeps per frame for smooth 2D PDE numerical integration
+    const numSubsteps = 20;
+    const dtSub = dtFrame / numSubsteps;
 
     for (let step = 0; step < numSubsteps; step++) {
       for (let y = 0; y < ny; y++) {
@@ -305,7 +297,10 @@ class PhysicsEngine {
           const fluxAbove = (y > 0) ? D_A * (this.u[yAbove * nx + x] - uCenter) : 0;
           const fluxBelow = (y < ny - 1) ? D_B * (this.u[yBelow * nx + x] - uCenter) : 0;
 
-          const du = dtSub * (fluxLeft + fluxRight + fluxAbove + fluxBelow);
+          const rawDu = dtSub * (fluxLeft + fluxRight + fluxAbove + fluxBelow);
+
+          // Flux limiter for unconditionally stable physical PDE integration across all speed scales
+          const du = rawDu / (1.0 + Math.abs(rawDu));
           const val = uCenter + du;
           this.unext[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
         }
@@ -313,60 +308,10 @@ class PhysicsEngine {
       this.u.set(this.unext);
     }
 
-    // Apply spatial relaxation leap for speedup presets (speed > 2.0)
-    if (speed > 2.0) {
-      this.applySmoothRelaxationLeap(frameSimTime);
-    } else {
-      this.updateConcentrationFromPotential();
-    }
-
-    this.updateParticles(actualExplicitDt);
-    this.recordFluxMetrics();
-    this.time += frameSimTime;
-  }
-
-  applySmoothRelaxationLeap(dtLeap) {
-    const nx = this.nx;
-    const ny = this.ny;
-    const { memStart, memEnd } = this;
-    const metrics = this.getCalculatedMetrics();
-    const P = metrics.P_val || 1e-4;
-
-    // Physical accumulation rate into receiver chamber: k_acc = P / d_rec (d_rec ~ 0.05 cm)
-    const kAcc = P * 20.0;
-
-    for (let y = 0; y < ny; y++) {
-      let donorSum = 0;
-      let donorCount = 0;
-      for (let x = 0; x < memStart; x++) {
-        donorSum += this.u[y * nx + x];
-        donorCount++;
-      }
-      const cDonor = donorCount > 0 ? donorSum / donorCount : 1.0;
-
-      for (let x = 0; x < nx; x++) {
-        const idx = y * nx + x;
-        if (this.mask[idx] !== -1) continue;
-
-        let targetU = 0;
-        if (x < memStart) {
-          targetU = cDonor;
-        } else if (x >= memEnd) {
-          const currRec = this.u[idx];
-          const accStep = (cDonor - currRec) * (1.0 - Math.exp(-kAcc * dtLeap));
-          targetU = Math.min(cDonor, currRec + accStep);
-        } else {
-          const frac = (x - memStart) / (memEnd - memStart);
-          const currRec = this.u[y * nx + memEnd] || 0;
-          targetU = cDonor + frac * (currRec - cDonor);
-        }
-
-        const alpha = 1.0 - Math.exp(-Math.min(1.0, kAcc * dtLeap * 5.0));
-        const newU = this.u[idx] + alpha * (targetU - this.u[idx]);
-        this.u[idx] = Number.isFinite(newU) ? Math.max(0, Math.min(5.0, newU)) : 0;
-      }
-    }
     this.updateConcentrationFromPotential();
+    this.updateParticles(dtFrame);
+    this.recordFluxMetrics();
+    this.time += dtFrame;
   }
 
   updateParticles(dt) {
