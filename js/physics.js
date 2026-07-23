@@ -257,25 +257,23 @@ class PhysicsEngine {
     const nx = this.nx;
     const ny = this.ny;
 
-    // 1. Determine maximum diffusion coefficient across domain
     let maxD = 0.1;
     for (let i = 0; i < nx * ny; i++) {
       if (this.Dmap[i] > maxD) maxD = this.Dmap[i];
     }
 
-    // 2. Strict 2D CFL stability upper bound: D * dt <= 0.15 (4 * D * dt <= 0.60 < 1.0)
     const safeDtLimit = 0.15 / Math.max(0.01, maxD);
     const speed = Math.max(0.1, this.params.speedMultiplier);
-    const targetFrameDt = (1 / 30.0) * speed;
+    
+    // Physical time step per frame (e.g. 1/30s at 1s/s, 2s at 1m/s, 120s at 1h/s)
+    const frameSimTime = (1 / 30.0) * speed;
 
-    // Execute sub-iterations with strict CFL safe dtSub (never exceed safeDtLimit)
-    const maxSubsteps = 40;
-    const numSubsteps = Math.min(maxSubsteps, Math.max(userSubsteps, Math.ceil(targetFrameDt / safeDtLimit)));
-    const dtSub = Math.min(safeDtLimit, targetFrameDt / numSubsteps);
-    const actualSimulatedTimeStep = numSubsteps * dtSub;
+    // Sub-stepping for explicit 2D stencil
+    const numSubsteps = Math.min(20, Math.max(userSubsteps, Math.ceil(frameSimTime / safeDtLimit)));
+    const dtSub = Math.min(safeDtLimit, frameSimTime / numSubsteps);
+    const actualExplicitDt = numSubsteps * dtSub;
 
     for (let step = 0; step < numSubsteps; step++) {
-      // 2D Finite Difference stencil for PDE: du/dt = div( D_hat * grad(u) )
       for (let y = 0; y < ny; y++) {
         const yAbove = (y > 0) ? y - 1 : y; // Neumann no-flux boundary top/bottom
         const yBelow = (y < ny - 1) ? y + 1 : y;
@@ -283,7 +281,6 @@ class PhysicsEngine {
         for (let x = 0; x < nx; x++) {
           const idx = y * nx + x;
 
-          // Check if fixed source or sink mask
           if (this.mask[idx] === 0) {
             this.unext[idx] = 1.0;
             continue;
@@ -298,7 +295,6 @@ class PhysicsEngine {
           const uCenter = this.u[idx];
           const Dcenter = this.Dmap[idx];
 
-          // Harmonic mean diffusion across cell interfaces
           const D_L = 2.0 * Dcenter * this.Dmap[y * nx + xLeft] / (Dcenter + this.Dmap[y * nx + xLeft] + 1e-6);
           const D_R = 2.0 * Dcenter * this.Dmap[y * nx + xRight] / (Dcenter + this.Dmap[y * nx + xRight] + 1e-6);
           const D_A = 2.0 * Dcenter * this.Dmap[yAbove * nx + x] / (Dcenter + this.Dmap[yAbove * nx + x] + 1e-6);
@@ -311,25 +307,22 @@ class PhysicsEngine {
 
           const du = dtSub * (fluxLeft + fluxRight + fluxAbove + fluxBelow);
           const val = uCenter + du;
-          // NaN Sanitizer & Clamping
           this.unext[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
         }
       }
-
-      // Copy buffer back to potential array u
       this.u.set(this.unext);
     }
 
-    // High Speedup analytical spatial relaxation leap for speedup presets (speed >= 1.5)
-    if (speed >= 1.5) {
-      const dtLeap = actualSimulatedTimeStep * speed;
-      this.applySmoothRelaxationLeap(dtLeap);
+    // Apply spatial relaxation leap for speedup presets (speed > 2.0)
+    if (speed > 2.0) {
+      this.applySmoothRelaxationLeap(frameSimTime);
+    } else {
+      this.updateConcentrationFromPotential();
     }
 
-    this.updateConcentrationFromPotential();
-    this.updateParticles(actualSimulatedTimeStep);
+    this.updateParticles(actualExplicitDt);
     this.recordFluxMetrics();
-    this.time += actualSimulatedTimeStep * (speed >= 1.5 ? speed : 1.0);
+    this.time += frameSimTime;
   }
 
   applySmoothRelaxationLeap(dtLeap) {
@@ -339,10 +332,9 @@ class PhysicsEngine {
     const metrics = this.getCalculatedMetrics();
     const P = metrics.P_val || 1e-4;
 
-    // Permeability accumulation rate calibrated to physical permeability P
-    const permRate = P * 0.8;
+    // Physical accumulation rate into receiver chamber: k_acc = P / d_rec (d_rec ~ 0.05 cm)
+    const kAcc = P * 20.0;
 
-    // Smooth exponential relaxation towards steady-state linear profile
     for (let y = 0; y < ny; y++) {
       let donorSum = 0;
       let donorCount = 0;
@@ -360,18 +352,16 @@ class PhysicsEngine {
         if (x < memStart) {
           targetU = cDonor;
         } else if (x >= memEnd) {
-          // Solute accumulation into receiver chamber driven by Permeability P (and K)
           const currRec = this.u[idx];
-          const accStep = (cDonor - currRec) * (1.0 - Math.exp(-permRate * dtLeap));
+          const accStep = (cDonor - currRec) * (1.0 - Math.exp(-kAcc * dtLeap));
           targetU = Math.min(cDonor, currRec + accStep);
         } else {
-          // Linear gradient across membrane slab
           const frac = (x - memStart) / (memEnd - memStart);
           const currRec = this.u[y * nx + memEnd] || 0;
           targetU = cDonor + frac * (currRec - cDonor);
         }
 
-        const alpha = 1.0 - Math.exp(-Math.min(3.0, permRate * dtLeap * 2.5));
+        const alpha = 1.0 - Math.exp(-Math.min(1.0, kAcc * dtLeap * 5.0));
         const newU = this.u[idx] + alpha * (targetU - this.u[idx]);
         this.u[idx] = Number.isFinite(newU) ? Math.max(0, Math.min(5.0, newU)) : 0;
       }
