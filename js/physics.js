@@ -514,26 +514,34 @@ class PhysicsEngine {
     return profile;
   }
 
-  // Calculate dynamic permeability metrics with log10(P) and thermal fluctuation uncertainty
+  // Calculate dynamic permeability metrics with log10(P), thermal fluctuation uncertainty, and lag time
   getCalculatedMetrics() {
-    const { order, fluidity, thicknessNm, partitionK, dBase25C, dBase, radiusNm, tempC } = this.params;
+    const { order, fluidity, thicknessNm, partitionK, dBase25C, dBase, soluteShape, aspectRatio, tempC } = this.params;
     const baseD = dBase25C !== undefined ? dBase25C : (dBase || 2.30);
     const tempFactor = this.getTemperatureFactor();
 
-    const radRatio = 0.70 / Math.max(0.10, radiusNm);
-    
-    // Physical diffusion coefficients (scaled to realistic units: 1e-5 cm²/s)
+    // 1. Compute effective hydrodynamic radius from MW & shape
+    const rh = this.computeHydrodynamicRadius();
+    const fShape = this.getPerrinShapeFactor(soluteShape, aspectRatio);
+
+    // 2. Compute physical aqueous water diffusion D_water (in cm²/s)
+    // Reference: D_water(18 Da, 25°C) = 2.30e-5 cm²/s = 2.30e-9 m²/s
+    // Reference: D_water(18 Da, 37°C) = 3.00e-5 cm²/s = 3.00e-9 m²/s
+    const radRatio = 0.17 / Math.max(0.08, rh);
     const dWaterCm2s = baseD * radRatio * tempFactor * 1e-5;
-    const dWaterM2s = dWaterCm2s * 1e-4; // 1 m²/s = 1e4 cm²/s
+    const dWaterM2s = dWaterCm2s * 1e-4; // m²/s
 
+    // 3. Compute physical membrane diffusion D_mem (in cm²/s)
     const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const dMemCm2s = dWaterCm2s * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6);
-    const dMemM2s = dMemCm2s * 1e-4;
+    const dMemCm2s = dWaterCm2s * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    const dMemM2s = dMemCm2s * 1e-4; // m²/s
 
-    const P = (partitionK * dMemCm2s) / (thicknessNm * 1e-7); // cm/s
+    // 4. Compute physical permeability P = K * D_mem / d (in cm/s)
+    const thicknessCm = thicknessNm * 1e-7;
+    const P = (partitionK * dMemCm2s) / thicknessCm; // cm/s
     const logP = Math.log10(Math.max(1e-12, P));
 
-    // Propagation of thermal & structural fluctuation uncertainty:
+    // 5. Propagation of thermal & structural fluctuation uncertainty:
     const fracErrK = 0.08;
     const fracErrD = 0.06;
     const fracErrS = (0.82 * 0.04) / Math.max(0.05, 1.0 - 0.82 * order);
@@ -543,9 +551,28 @@ class PhysicsEngine {
     const sigmaP = P * fracErrP;
     const sigmaLogP = fracErrP / Math.LN10;
 
-    const lagTime = (thicknessNm * 1e-7 * thicknessNm * 1e-7) / Math.max(1e-15, 6 * dMemCm2s);
-    const sigmaLag = lagTime * Math.sqrt(4 * fracErrD * fracErrD + fracErrS * fracErrS);
+    // 6. Compute Theoretical Lag Time tau = d^2 / (6 * D_mem)
+    const gridMemWidth = this.memEnd - this.memStart;
+    const dGrid = Math.max(1, gridMemWidth);
+    const dMemGrid = dMemCm2s * 1e5;
+    const lagTimeSim = (dGrid * dGrid * 0.08) / Math.max(0.0001, 6 * dMemGrid);
+    const sigmaLagSim = lagTimeSim * Math.sqrt(4 * fracErrD * fracErrD + fracErrS * fracErrS);
 
+    const lagTimePhys = (thicknessCm * thicknessCm) / Math.max(1e-18, 6 * dMemCm2s);
+
+    const formatLag = (tauSec) => {
+      if (tauSec < 1e-3) {
+        return `${(tauSec * 1e6).toFixed(1)} \u03BCs`;
+      } else if (tauSec < 1.0) {
+        return `${(tauSec * 1e3).toFixed(1)} ms`;
+      } else if (tauSec < 3600) {
+        return `${tauSec.toFixed(1)} s`;
+      } else {
+        return `${(tauSec / 3600).toFixed(1)} h`;
+      }
+    };
+
+    // 7. Compute steady-state flux J_ss = P * deltaC
     const profile = this.getProfile1D();
     const cLeft = profile[Math.floor(this.memStart / 2)] || 1.0;
     const cRight = profile[Math.floor((this.nx + this.memEnd) / 2)] || 0.0;
@@ -556,14 +583,15 @@ class PhysicsEngine {
       tempC: (tempC !== undefined ? tempC : 37.0).toFixed(1),
       dWaterCm2s: dWaterCm2s.toExponential(2),
       dWaterM2s: dWaterM2s.toExponential(2),
-      dWater_str: `${dWaterCm2s.toExponential(2)} cm\u00B2/s (${dWaterM2s.toExponential(2)} m\u00B2/s)`,
-      dMem_str: `${dMemCm2s.toExponential(2)} cm\u00B2/s (${dMemM2s.toExponential(2)} m\u00B2/s)`,
+      dWater_str: `${dWaterCm2s.toExponential(2)} cm\u00B2/s`,
+      dMem_str: `${dMemCm2s.toExponential(2)} cm\u00B2/s`,
       dMem: dMemCm2s.toExponential(2),
       P_val: P,
       P_str: `${P.toExponential(2)} \u00B1 ${sigmaP.toExponential(1)}`,
       logP_val: logP,
       logP_str: `${logP.toFixed(2)} \u00B1 ${sigmaLogP.toFixed(2)}`,
-      lagTime: `${lagTime.toFixed(1)} \u00B1 ${sigmaLag.toFixed(1)}`,
+      lagTime: `${lagTimeSim.toFixed(1)} \u00B1 ${sigmaLagSim.toFixed(1)}`,
+      lagTimePhys: formatLag(lagTimePhys),
       steadyStateFlux: `${steadyStateFlux.toExponential(2)} \u00B1 ${sigmaFlux.toExponential(1)}`
     };
   }
