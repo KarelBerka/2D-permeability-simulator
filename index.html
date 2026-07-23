@@ -341,6 +341,33 @@
               </select>
             </div>
 
+            <!-- Molecular Shape Selector -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="select-solute-shape">Molecular Shape Geometry</label>
+                <span id="val-shape-factor" class="val-badge">Sphere (f = 1.00)</span>
+              </div>
+              <select id="select-solute-shape" class="full-width-select">
+                <option value="sphere" selected>🟣 Sphere / Globular (Perrin f = 1.00)</option>
+                <option value="rod">🥖 Rod / Elongated Cylinder (Perrin f = 1.28)</option>
+                <option value="disc">🪙 Disc / Planar Ring (Perrin f = 1.18)</option>
+              </select>
+            </div>
+
+            <!-- Solute Aspect Ratio Slider (Length/Width ratio p) -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-aspect">Aspect Ratio (<i>p = a/b</i>)</label>
+                <span id="val-aspect" class="val-badge">1.0 (Sphere)</span>
+              </div>
+              <input type="range" id="slider-aspect" min="1.0" max="8.0" step="0.2" value="1.0" />
+              <div class="slider-meta">
+                <span>Isometric (p = 1)</span>
+                <span>Perrin Hydrodynamic Drag</span>
+                <span>Elongated (p = 8)</span>
+              </div>
+            </div>
+
             <!-- Solute Hydrodynamic Radius Slider (Stokes-Einstein Scaling) -->
             <div class="control-item">
               <div class="control-label-row">
@@ -350,7 +377,7 @@
               <input type="range" id="slider-radius" min="0.15" max="2.50" step="0.05" value="0.70" />
               <div class="slider-meta">
                 <span>Tiny (0.15 nm)</span>
-                <span>Stokes-Einstein: <i>D = k<sub>B</sub>T / (6&pi;&eta;r<sub>h</sub>) &propto; 1/r<sub>h</sub></i></span>
+                <span>Stokes-Einstein: <i>D = k<sub>B</sub>T / (6&pi;&eta;r<sub>h</sub> f<sub>shape</sub>)</i></span>
                 <span>Large (2.5 nm)</span>
               </div>
             </div>

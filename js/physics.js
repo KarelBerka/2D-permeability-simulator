@@ -30,6 +30,8 @@ class PhysicsEngine {
       dBase25C: 2.30,       // Base water self-diffusion D_0 at 25°C (2.30e-5 cm²/s = 2.30e-9 m²/s)
       dBase: 2.30,          // Backward compatibility alias
       soluteType: 'drug',   // 'water', 'ion', 'small_organic', 'drug', 'macrocycle', 'biopolymer'
+      soluteShape: 'sphere',// 'sphere', 'rod', 'disc'
+      aspectRatio: 1.0,     // Aspect Ratio p = length/width (1.0 = isometric sphere)
       mwDa: 300,            // Molecular Weight in Daltons
       radiusNm: 0.70,       // Solute Hydrodynamic Radius r_h in nm
       hasChannel: false,    // Transmembrane pore channel
@@ -69,6 +71,39 @@ class PhysicsEngine {
     return Math.exp(-2180 / T_kelvin + 2180 / 298.15);
   }
 
+  getPerrinShapeFactor(shape, aspectRatio) {
+    const p = Math.max(1.0, aspectRatio || 1.0);
+    if (shape === 'sphere' || Math.abs(p - 1.0) < 0.02) {
+      return 1.0;
+    }
+    if (shape === 'rod') {
+      // Prolate Ellipsoid (Rod / Cylinder):
+      // f/f0 = sqrt(p^2 - 1) / (p^(2/3) * ln(p + sqrt(p^2 - 1)))
+      const num = Math.sqrt(p * p - 1.0);
+      const den = Math.pow(p, 2.0 / 3.0) * Math.log(p + num);
+      return num / Math.max(0.001, den);
+    } else if (shape === 'disc') {
+      // Oblate Ellipsoid (Disc / Flat Ring):
+      // f/f0 = sqrt(p^2 - 1) / (p^(2/3) * atan(sqrt(p^2 - 1)))
+      const num = Math.sqrt(p * p - 1.0);
+      const den = Math.pow(p, 2.0 / 3.0) * Math.atan(num);
+      return num / Math.max(0.001, den);
+    }
+    return 1.0;
+  }
+
+  computeHydrodynamicRadius() {
+    const { mwDa, soluteShape, aspectRatio, radiusNm } = this.params;
+    if (this.params.manualRadiusOverride) {
+      return radiusNm;
+    }
+    // Equivalent spherical radius from molecular weight: Req = 0.066 * (MW)^(1/3) nm
+    // For water (MW = 18 Da): Req = 0.17 nm
+    const Req = 0.066 * Math.pow(Math.max(1, mwDa || 18), 1 / 3);
+    const fShape = this.getPerrinShapeFactor(soluteShape, aspectRatio);
+    return Req * fShape;
+  }
+
   updateMembraneGeometry() {
     // Thickness maps from nm (2.0 to 10.0) to grid columns (e.g. 16 to 48 columns)
     const thicknessGrid = Math.round((this.params.thicknessNm / 10.0) * 44) + 8;
@@ -78,17 +113,22 @@ class PhysicsEngine {
   }
 
   rebuildDiffusionMap() {
-    const { order, fluidity, dBase25C, dBase, partitionK, hasChannel, radiusNm } = this.params;
+    const { order, fluidity, dBase25C, dBase, partitionK, hasChannel, soluteShape, aspectRatio } = this.params;
     const baseD = dBase25C !== undefined ? dBase25C : (dBase || 2.30);
     const tempFactor = this.getTemperatureFactor();
     
-    // Stokes-Einstein Diffusion Scaling: D ~ 1 / r_h, scaled by temperature
-    const radRatio = 0.70 / Math.max(0.10, radiusNm);
+    const rh = this.computeHydrodynamicRadius();
+    this.params.radiusNm = rh; // Sync effective rh
+
+    // Stokes-Einstein Hydrodynamic Diffusion Scaling: D_water ~ (r_water / r_h) / f_shape
+    // Calibrated against pure water self-diffusion r_water = 0.17 nm (18 Da)
+    const radRatio = 0.17 / Math.max(0.08, rh);
     const dWaterEff = baseD * radRatio * tempFactor;
 
-    // Membrane diffusion D_mem includes steric packing hindrance (radRatio^0.6)
+    // Membrane diffusion D_mem includes shape packing hindrance inside lipid bilayer core
+    const fShape = this.getPerrinShapeFactor(soluteShape, aspectRatio);
     const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const dMem = dWaterEff * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6);
+    const dMem = dWaterEff * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
 
     const channelYStart = Math.floor(this.ny * 0.42);
     const channelYEnd = Math.floor(this.ny * 0.58);

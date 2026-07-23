@@ -62,8 +62,33 @@ class ControlsManager {
       });
     }
 
+    // Solute Shape Selector & Aspect Ratio Slider
+    const selectSoluteShape = document.getElementById('select-solute-shape');
+    if (selectSoluteShape) {
+      selectSoluteShape.addEventListener('change', (e) => {
+        this.physics.params.soluteShape = e.target.value;
+        this.physics.params.manualRadiusOverride = false;
+        this.physics.rebuildDiffusionMap();
+        this.syncSlidersFromPhysics();
+        this.updateMetricsUI();
+      });
+    }
+
+    this.bindSlider('slider-aspect', 'val-aspect', (val) => {
+      this.physics.params.aspectRatio = parseFloat(val);
+      this.physics.params.manualRadiusOverride = false;
+      this.physics.rebuildDiffusionMap();
+      this.syncSlidersFromPhysics();
+    }, (val) => {
+      const p = parseFloat(val);
+      const shape = this.physics.params.soluteShape || 'sphere';
+      if (shape === 'sphere' || p <= 1.05) return '1.0 (Sphere)';
+      return `${p.toFixed(1)} (${shape === 'rod' ? 'Rod' : 'Disc'})`;
+    });
+
     this.bindSlider('slider-radius', 'val-radius', (val) => {
       this.physics.params.radiusNm = parseFloat(val);
+      this.physics.params.manualRadiusOverride = true;
       this.physics.rebuildDiffusionMap();
     }, (val) => `${parseFloat(val).toFixed(2)} nm`);
 
@@ -271,7 +296,7 @@ class ControlsManager {
   }
 
   syncSlidersFromPhysics() {
-    const { order, fluidity, thicknessNm, partitionK, dBase, radiusNm, mwDa, soluteType, hasChannel } = this.physics.params;
+    const { order, fluidity, thicknessNm, partitionK, dBase, radiusNm, mwDa, soluteType, soluteShape, aspectRatio, tempC, hasChannel } = this.physics.params;
 
     const setVal = (id, badgeId, val, formatted) => {
       const slider = document.getElementById(id);
@@ -280,15 +305,29 @@ class ControlsManager {
       if (badge) badge.textContent = formatted;
     };
 
+    const p = aspectRatio || 1.0;
+    const shape = soluteShape || 'sphere';
+    const fShape = this.physics.getPerrinShapeFactor(shape, p);
+
     setVal('slider-radius', 'val-radius', radiusNm, `${radiusNm.toFixed(2)} nm`);
+    setVal('slider-aspect', 'val-aspect', p, p <= 1.05 ? '1.0 (Sphere)' : `${p.toFixed(1)} (${shape === 'rod' ? 'Rod' : 'Disc'})`);
+    setVal('slider-temp', 'val-temp', tempC || 37.0, `${(tempC || 37.0).toFixed(1)} \u00B0C (${((tempC || 37.0) + 273.15).toFixed(2)} K)`);
     setVal('slider-order', 'val-order', order, order.toFixed(2));
     setVal('slider-fluidity', 'val-fluidity', fluidity, fluidity.toFixed(2));
     setVal('slider-thickness', 'val-thickness', thicknessNm, `${thicknessNm.toFixed(1)} nm`);
     setVal('slider-partition', 'val-partition', partitionK, partitionK.toFixed(2));
-    setVal('slider-dwater', 'val-dwater', dBase, `${dBase.toFixed(2)} cm²/s`);
 
     const selectSoluteType = document.getElementById('select-solute-type');
     if (selectSoluteType) selectSoluteType.value = soluteType;
+
+    const selectSoluteShape = document.getElementById('select-solute-shape');
+    if (selectSoluteShape) selectSoluteShape.value = shape;
+
+    const shapeBadge = document.getElementById('val-shape-factor');
+    if (shapeBadge) {
+      const shapeName = shape === 'rod' ? 'Rod' : (shape === 'disc' ? 'Disc' : 'Sphere');
+      shapeBadge.textContent = `${shapeName} (f = ${fShape.toFixed(2)})`;
+    }
 
     const mwBadge = document.getElementById('val-solute-mw');
     if (mwBadge) mwBadge.textContent = `${mwDa} Da`;
