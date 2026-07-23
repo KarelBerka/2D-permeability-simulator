@@ -411,8 +411,9 @@ class PhysicsEngine {
 
     // 2. Count existing particles per grid column x
     const particlesPerColumn = new Uint16Array(nx);
+    const numParticles = this.particles.length;
 
-    for (let i = 0; i < this.particles.length; i++) {
+    for (let i = 0; i < numParticles; i++) {
       const p = this.particles[i];
       if (!p) continue;
       const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
@@ -421,6 +422,7 @@ class PhysicsEngine {
 
     // 3. Exact column-by-column target scaling: 5.5 particles per unit concentration
     const scaleFactor = 5.5;
+    let needsFilter = false;
 
     for (let x = 2; x < nx - 2; x++) {
       const targetInCol = Math.round(c1D[x] * scaleFactor);
@@ -430,7 +432,7 @@ class PhysicsEngine {
         const needed = targetInCol - currentInCol;
         for (let k = 0; k < needed; k++) {
           let ry = Math.floor(Math.random() * ny);
-          for (let attempt = 0; attempt < 8; attempt++) {
+          for (let attempt = 0; attempt < 5; attempt++) {
             const testY = Math.floor(Math.random() * ny);
             if (Math.random() < Math.min(1.0, this.C[testY * nx + x] + 0.1)) {
               ry = testY;
@@ -448,14 +450,19 @@ class PhysicsEngine {
         }
       } else if (currentInCol > targetInCol + 1) {
         let toRemove = currentInCol - targetInCol;
-        for (let i = this.particles.length - 1; i >= 0 && toRemove > 0; i--) {
+        for (let i = numParticles - 1; i >= 0 && toRemove > 0; i--) {
           const p = this.particles[i];
           if (p && Math.floor(p.x) === x) {
-            this.particles.splice(i, 1);
+            this.particles[i] = null;
             toRemove--;
+            needsFilter = true;
           }
         }
       }
+    }
+
+    if (needsFilter) {
+      this.particles = this.particles.filter(p => p !== null);
     }
   }
 
