@@ -20,12 +20,13 @@ class PhysicsEngine {
     // Fixed Source / Sink mask (-1: regular, 0: fixed source, 1: fixed sink)
     this.mask = new Int8Array(nx * ny).fill(-1);
 
-    // Physics parameters
+    // Physics parameters (Calibrated to POPC bilayer experimental baseline at 37°C)
     this.params = {
+      lipidPreset: 'popc',  // 'popc', 'popc_chol', 'dppc_gel', 'ecoli', 'sphingomyelin'
       tempC: 37.0,          // Default to 37°C Human Body Temperature (310.15 K)
-      order: 0.65,          // Lipid Order parameter S (0.1 = liquid disordered, 0.95 = ordered gel)
-      fluidity: 0.50,       // Membrane Fluidity eta (0.05 = viscous, 1.0 = fluid)
-      thicknessNm: 4.5,     // Membrane thickness in nm
+      order: 0.60,          // POPC Lipid Order parameter S (0.60 at 37°C, L_alpha phase)
+      fluidity: 0.55,       // POPC Membrane Fluidity eta (0.55 lateral mobility)
+      thicknessNm: 3.9,     // POPC Hydrophobic Core Thickness (3.9 nm)
       partitionK: 1.20,     // Partition coefficient K = C_mem / C_water
       dBase25C: 2.30,       // Base water self-diffusion D_0 at 25°C (2.30e-5 cm²/s = 2.30e-9 m²/s)
       dBase: 2.30,          // Backward compatibility alias

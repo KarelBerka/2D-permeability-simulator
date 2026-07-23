@@ -244,9 +244,7 @@
         <div class="sidebar-header">
           <h2>Scalable Parameters</h2>
           <p class="sidebar-desc">Expand cards below to adjust membrane & solute properties.</p>
-        </div>
-
-        <!-- EXPANDABLE MEMBRANE PARAMETERS CARD -->
+        </di        <!-- EXPANDABLE MEMBRANE PARAMETERS CARD -->
         <details open class="control-group-card expandable">
           <summary class="card-title clickable">
             <div class="title-left">
@@ -257,11 +255,27 @@
           </summary>
 
           <div class="card-content">
+            <!-- Membrane Lipid Composition Selector (POPC Reference) -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="select-lipid-preset">Lipid Membrane Composition</label>
+                <button class="info-btn" data-info="lipid-preset" title="Learn more">i</button>
+              </div>
+              <select id="select-lipid-preset" class="full-width-select">
+                <option value="popc" selected>🧪 POPC Bilayer (Fluid L&alpha; phase, 37&deg;C) [POPC Default]</option>
+                <option value="popc_chol">🧪 POPC + 30% Cholesterol (Liquid-Ordered L_o)</option>
+                <option value="dppc_gel">🧪 DPPC Bilayer (Ordered Gel L_&beta;' phase, 25&deg;C)</option>
+                <option value="ecoli">🧪 E. coli Total Lipid Extract (Bacterial)</option>
+                <option value="sphingomyelin">🧪 Sphingomyelin + Raft Domain (Thick 6.0 nm)</option>
+              </select>
+            </div>
+
             <!-- Temperature Control (Body Temp 37°C / 310.15K) -->
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-temp">Temperature (<i>T</i>)</label>
                 <span id="val-temp" class="val-badge">37.0 &deg;C (310.15 K)</span>
+                <button class="info-btn" data-info="temp" title="Learn more">i</button>
               </div>
               <input type="range" id="slider-temp" min="4.0" max="50.0" step="0.5" value="37.0" />
               <div class="slider-meta">
@@ -270,18 +284,20 @@
                 <span>37&deg;C (Body 🩸)</span>
                 <span>50&deg;C</span>
               </div>
-              <p class="help-text">Water diffusion scales to 2.3&times;10&minus;5 cm&sup2;/s (2.3&times;10&minus;9 m&sup2;/s) at 25&deg;C and 3.0&times;10&minus;5 cm&sup2;/s (3.0&times;10&minus;9 m&sup2;/s) at 37&deg;C.</p>
+              <p class="help-text">Water self-diffusion scales to 2.3&times;10&minus;5 cm&sup2;/s (2.3&times;10&minus;9 m&sup2;/s) at 25&deg;C and 3.0&times;10&minus;5 cm&sup2;/s (3.0&times;10&minus;9 m&sup2;/s) at 37&deg;C.</p>
             </div>
 
             <!-- Lipid Order -->
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-order">Lipid Order Parameter (<i>S</i>)</label>
-                <span id="val-order" class="val-badge">0.65</span>
+                <span id="val-order" class="val-badge">0.60</span>
+                <button class="info-btn" data-info="order" title="Learn more">i</button>
               </div>
-              <input type="range" id="slider-order" min="0.10" max="0.95" step="0.01" value="0.65" />
+              <input type="range" id="slider-order" min="0.10" max="0.95" step="0.01" value="0.60" />
               <div class="slider-meta">
                 <span>Disordered (<i>L<sub>&alpha;</sub></i>)</span>
+                <span>POPC (0.60)</span>
                 <span>Ordered Gel (<i>L<sub>&beta;</sub></i>)</span>
               </div>
             </div>
@@ -290,9 +306,10 @@
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-fluidity">Membrane Fluidity (&eta;)</label>
-                <span id="val-fluidity" class="val-badge">0.50</span>
+                <span id="val-fluidity" class="val-badge">0.55</span>
+                <button class="info-btn" data-info="fluidity" title="Learn more">i</button>
               </div>
-              <input type="range" id="slider-fluidity" min="0.05" max="1.00" step="0.01" value="0.50" />
+              <input type="range" id="slider-fluidity" min="0.05" max="1.00" step="0.01" value="0.55" />
               <div class="slider-meta">
                 <span>Viscous / Rigid</span>
                 <span>High Fluidity</span>
@@ -303,11 +320,13 @@
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-thickness">Membrane Thickness (<i>d</i>)</label>
-                <span id="val-thickness" class="val-badge">4.5 nm</span>
+                <span id="val-thickness" class="val-badge">3.9 nm</span>
+                <button class="info-btn" data-info="thickness" title="Learn more">i</button>
               </div>
-              <input type="range" id="slider-thickness" min="2.0" max="10.0" step="0.5" value="4.5" />
+              <input type="range" id="slider-thickness" min="2.0" max="10.0" step="0.1" value="3.9" />
               <div class="slider-meta">
                 <span>Thin (2 nm)</span>
+                <span>POPC (3.9 nm)</span>
                 <span>Thick (10 nm)</span>
               </div>
             </div>
@@ -330,6 +349,7 @@
               <div class="control-label-row">
                 <label for="select-solute-type">Solute Category & Size</label>
                 <span id="val-solute-mw" class="val-badge">300 Da</span>
+                <button class="info-btn" data-info="solute-type" title="Learn more">i</button>
               </div>
               <select id="select-solute-type" class="full-width-select">
                 <option value="water">Water Molecule (18 Da, 0.15 nm)</option>
@@ -346,6 +366,7 @@
               <div class="control-label-row">
                 <label for="select-solute-shape">Molecular Shape Geometry</label>
                 <span id="val-shape-factor" class="val-badge">Sphere (f = 1.00)</span>
+                <button class="info-btn" data-info="solute-shape" title="Learn more">i</button>
               </div>
               <select id="select-solute-shape" class="full-width-select">
                 <option value="sphere" selected>🟣 Sphere / Globular (Perrin f = 1.00)</option>
@@ -359,6 +380,7 @@
               <div class="control-label-row">
                 <label for="slider-aspect">Aspect Ratio (<i>p = a/b</i>)</label>
                 <span id="val-aspect" class="val-badge">1.0 (Sphere)</span>
+                <button class="info-btn" data-info="aspect-ratio" title="Learn more">i</button>
               </div>
               <input type="range" id="slider-aspect" min="1.0" max="8.0" step="0.2" value="1.0" />
               <div class="slider-meta">
@@ -373,6 +395,7 @@
               <div class="control-label-row">
                 <label for="slider-radius">Hydrodynamic Radius (<i>r<sub>h</sub></i>)</label>
                 <span id="val-radius" class="val-badge">0.70 nm</span>
+                <button class="info-btn" data-info="radius" title="Learn more">i</button>
               </div>
               <input type="range" id="slider-radius" min="0.15" max="2.50" step="0.05" value="0.70" />
               <div class="slider-meta">
@@ -387,6 +410,7 @@
               <div class="control-label-row">
                 <label for="slider-partition">Partition Coefficient (<i>K = C<sub>mem</sub>/C<sub>water</sub></i>)</label>
                 <span id="val-partition" class="val-badge">1.20</span>
+                <button class="info-btn" data-info="partition" title="Learn more">i</button>
               </div>
               <input type="range" id="slider-partition" min="0.05" max="5.00" step="0.05" value="1.20" />
               <div class="slider-meta">
@@ -395,24 +419,12 @@
               </div>
             </div>
 
-            <!-- Aqueous Diffusion Coefficient -->
-            <div class="control-item">
-              <div class="control-label-row">
-                <label for="slider-dwater">Base Water Diff Coeff (<i>D<sub>0</sub></i>)</label>
-                <span id="val-dwater" class="val-badge">1.00 cm²/s</span>
-              </div>
-              <input type="range" id="slider-dwater" min="0.2" max="2.5" step="0.05" value="1.00" />
-              <div class="slider-meta">
-                <span>Slow</span>
-                <span>Fast</span>
-              </div>
-            </div>
-
             <!-- Transmembrane Pore / Channel -->
             <div class="control-item checkbox-item">
               <div class="checkbox-wrapper">
                 <input type="checkbox" id="chk-channel" />
                 <label for="chk-channel">Insert Aqueous Pore Channel</label>
+                <button class="info-btn" data-info="channel" title="Learn more">i</button>
               </div>
               <p class="help-text">Creates a high-permeability aqueous pore through hydrophobic lipid core.</p>
             </div>
@@ -420,6 +432,26 @@
         </details>
       </aside>
     </main>
+  </div>
+
+  <!-- Parameter Information Modal / Popover -->
+  <div id="info-modal-backdrop" class="info-modal-backdrop hidden">
+    <div class="info-modal-card">
+      <div class="info-modal-header">
+        <div class="info-modal-title">
+          <span id="info-modal-icon">ℹ️</span>
+          <h3 id="info-modal-heading">Parameter Information</h3>
+        </div>
+        <button id="info-modal-close" class="btn-icon-close">&times;</button>
+      </div>
+      <div class="info-modal-body">
+        <p id="info-modal-text">Explanation content...</p>
+        <div class="info-impact-box">
+          <strong>⚡ Impact on Permeability & Membrane Integrity:</strong>
+          <p id="info-modal-impact">Impact description...</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- JavaScript Modules -->

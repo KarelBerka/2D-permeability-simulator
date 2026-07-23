@@ -1,6 +1,60 @@
-/**
- * controls.js - UI Event Binding, Interactive Sliders ("Knobs"), Canvas Painting & Presets Manager
- */
+const PARAM_INFO_DICTIONARY = {
+  'lipid-preset': {
+    title: 'Lipid Membrane Composition (POPC Reference)',
+    text: 'Selects experimental lipid membrane compositions. POPC (16:0-18:1 PC) is the standard liquid-disordered (L\u03B1) biological lipid bilayer baseline (Tm = -2\u00B0C). Adding 30% Cholesterol forms a rigid liquid-ordered (Lo) phase, while DPPC at 25\u00B0C represents an ordered gel (L\u03B2\') phase.',
+    impact: 'DPPC gel or Cholesterol-dense membranes drastically increase chain packing order (S ~ 0.85), reducing permeability P by up to 50x.'
+  },
+  'temp': {
+    title: 'Temperature (T)',
+    text: 'System temperature in Celsius and Kelvin (default 37.0\u00B0C / 310.15 K human body temperature). Controls thermal kinetic energy (k_B T) and liquid viscosity.',
+    impact: 'Higher temperature increases water self-diffusion (2.3e-5 cm\u00B2/s at 25\u00B0C -> 3.0e-5 cm\u00B2/s at 37\u00B0C), fluidizes lipid acyl chains (higher \u03B7, lower S), and accelerates permeation. Excessive heat (>45\u00B0C) destabilizes membrane structural order!'
+  },
+  'order': {
+    title: 'Lipid Order Parameter (S)',
+    text: 'Quantifies the average orientation of lipid acyl chains relative to the membrane normal (S = 0.1 for fluid L\u03B1 phase, S = 0.95 for rigid gel L\u03B2 phase). POPC reference at 37\u00B0C has S \u2248 0.60.',
+    impact: 'Higher order aligns lipid tails tightly, creating a dense steric packing barrier that sharply lowers membrane diffusion D_mem and permeability P.'
+  },
+  'fluidity': {
+    title: 'Membrane Fluidity (\u03B7)',
+    text: 'Measures lateral mobility, free volume, and rotational flexibility within the hydrophobic lipid core.',
+    impact: 'Higher fluidity increases free-volume cavity formation inside the membrane core, accelerating solute translocation.'
+  },
+  'thickness': {
+    title: 'Membrane Thickness (d)',
+    text: 'Distance across the hydrophobic lipid bilayer core (typically 3.9 - 4.5 nm for POPC bilayers).',
+    impact: 'Thicker membranes increase diffusion path length. Permeability scales inversely (P = K\u00B7D_mem / d), while theoretical lag time increases quadratically (\u03C4 = d\u00B2 / 6D_mem).'
+  },
+  'solute-type': {
+    title: 'Solute Category & Molecular Weight (MW)',
+    text: 'Categorizes solutes from tiny water molecules (18 Da) up to large biopolymers (3000 Da).',
+    impact: 'Larger molecular weight increases equivalent hydrodynamic radius (Req \u221D MW^(1/3)), increasing hydrodynamic drag in water and steric hindrance inside lipid tails.'
+  },
+  'solute-shape': {
+    title: 'Molecular Shape Geometry',
+    text: 'Sets molecular geometry (Sphere, Rod, or Disc). Hydrodynamic drag is governed by Perrin ellipsoid friction theory (f_shape).',
+    impact: 'Rods and flat discs experience higher friction drag (f_shape > 1.0) than isometric spheres, slowing water diffusion and membrane permeation.'
+  },
+  'aspect-ratio': {
+    title: 'Aspect Ratio (p = a/b)',
+    text: 'Length-to-width ratio of prolate (rod) or oblate (disc) ellipsoids (p = 1.0 for spheres, p = 4.0 for elongated rods/discs).',
+    impact: 'Higher aspect ratio increases Perrin drag factor f_shape, slowing overall diffusion speed.'
+  },
+  'radius': {
+    title: 'Hydrodynamic Radius (r_h)',
+    text: 'Effective Stokes-Einstein radius of the solute molecule in solution.',
+    impact: 'Aqueous diffusion scales inversely with r_h (D_water \u221D 1/r_h). Inside lipid core, larger radius faces additional steric hindrance.'
+  },
+  'partition': {
+    title: 'Partition Coefficient (K = C_mem / C_water)',
+    text: 'Thermodynamic equilibrium ratio of solute concentration inside hydrophobic lipid core relative to water (Overton\'s Rule).',
+    impact: 'Lipophilic compounds (K > 1) dissolve strongly into lipid core, creating high concentration gradient and accelerating steady-state flux J_ss.'
+  },
+  'channel': {
+    title: 'Transmembrane Pore Channel',
+    text: 'Inserts an aqueous protein pore across the hydrophobic lipid membrane slab.',
+    impact: 'Allows hydrophilic or charged solutes (low K) to bypass the hydrophobic lipid core and diffuse rapidly through the aqueous pore.'
+  }
+};
 
 class ControlsManager {
   constructor(physics, render, charts) {
@@ -34,6 +88,68 @@ class ControlsManager {
         const currentPreset = presetSelect ? presetSelect.value : 'default';
         this.physics.resetScenario(currentPreset);
         this.updateMetricsUI();
+      });
+    }
+
+    // Lipid Membrane Presets (POPC Baseline Reference)
+    const lipidPresets = {
+      popc:          { order: 0.60, fluidity: 0.55, thickness: 3.9, temp: 37.0 },
+      popc_chol:     { order: 0.82, fluidity: 0.35, thickness: 4.3, temp: 37.0 },
+      dppc_gel:      { order: 0.88, fluidity: 0.10, thickness: 4.7, temp: 25.0 },
+      ecoli:         { order: 0.68, fluidity: 0.45, thickness: 4.1, temp: 37.0 },
+      sphingomyelin: { order: 0.78, fluidity: 0.25, thickness: 6.0, temp: 37.0 }
+    };
+
+    const selectLipidPreset = document.getElementById('select-lipid-preset');
+    if (selectLipidPreset) {
+      selectLipidPreset.addEventListener('change', (e) => {
+        const lp = lipidPresets[e.target.value] || lipidPresets.popc;
+        this.physics.params.lipidPreset = e.target.value;
+        this.physics.params.order = lp.order;
+        this.physics.params.fluidity = lp.fluidity;
+        this.physics.params.thicknessNm = lp.thickness;
+        this.physics.params.tempC = lp.temp;
+        this.physics.updateMembraneGeometry();
+        this.physics.rebuildDiffusionMap();
+        this.syncSlidersFromPhysics();
+        this.updateMetricsUI();
+      });
+    }
+
+    // Parameter Info Modal System (i Buttons)
+    const infoModalBackdrop = document.getElementById('info-modal-backdrop');
+    const infoModalClose = document.getElementById('info-modal-close');
+    const infoModalHeading = document.getElementById('info-modal-heading');
+    const infoModalText = document.getElementById('info-modal-text');
+    const infoModalImpact = document.getElementById('info-modal-impact');
+
+    const openInfoModal = (paramKey) => {
+      const data = PARAM_INFO_DICTIONARY[paramKey];
+      if (data && infoModalBackdrop) {
+        if (infoModalHeading) infoModalHeading.textContent = data.title;
+        if (infoModalText) infoModalText.textContent = data.text;
+        if (infoModalImpact) infoModalImpact.textContent = data.impact;
+        infoModalBackdrop.classList.remove('hidden');
+      }
+    };
+
+    const closeInfoModal = () => {
+      if (infoModalBackdrop) infoModalBackdrop.classList.add('hidden');
+    };
+
+    document.querySelectorAll('.info-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const paramKey = btn.getAttribute('data-info');
+        openInfoModal(paramKey);
+      });
+    });
+
+    if (infoModalClose) infoModalClose.addEventListener('click', closeInfoModal);
+    if (infoModalBackdrop) {
+      infoModalBackdrop.addEventListener('click', (e) => {
+        if (e.target === infoModalBackdrop) closeInfoModal();
       });
     }
 
