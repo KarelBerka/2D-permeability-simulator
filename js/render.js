@@ -1,7 +1,7 @@
 /**
- * render.js - 2D Membrane Permeability Visualizer & Canvas Render Engine
- * Implements high-performance heatmap color maps, marching isolines, discrete solute particles,
- * and microscopic lipid bilayer structure (lipid heads & animated hydrophobic tails).
+ * render.js - 2D Membrane Permeability Visualizer & Canvas Render Engine (Dual-Solute Support)
+ * Implements high-performance Blue/Red composite heatmaps, marching isolines,
+ * discrete Blue (Solute A) & Red (Solute B) particles, and lipid bilayer structure.
  */
 
 class RenderEngine {
@@ -22,12 +22,30 @@ class RenderEngine {
     // Offscreen buffer for heatmap pixel rendering
     this.imgData = this.ctx.createImageData(this.width, this.height);
 
-    // Precomputed colormaps (256 RGB entries)
+    // Precomputed colormaps for single-solute and dual-solute rendering
     this.colormaps = {};
     this.initColormaps();
   }
 
   initColormaps() {
+    // Solute A (Blue Spectrum)
+    this.colormaps.soluteA = this.generateColormap([
+      { r: 4, g: 8, b: 24 },
+      { r: 0, g: 85, b: 255 },
+      { r: 0, g: 200, b: 255 },
+      { r: 180, g: 245, b: 255 },
+      { r: 255, g: 255, b: 255 }
+    ]);
+
+    // Solute B (Red Spectrum)
+    this.colormaps.soluteB = this.generateColormap([
+      { r: 24, g: 4, b: 12 },
+      { r: 230, g: 0, b: 50 },
+      { r: 255, g: 90, b: 0 },
+      { r: 255, g: 210, b: 120 },
+      { r: 255, g: 255, b: 255 }
+    ]);
+
     this.colormaps.viridis = this.generateColormap([
       { r: 68, g: 1, b: 84 },
       { r: 59, g: 82, b: 139 },
@@ -50,22 +68,6 @@ class RenderEngine {
       { r: 245, g: 100, b: 20 },
       { r: 255, g: 200, b: 30 },
       { r: 255, g: 255, b: 240 }
-    ]);
-
-    this.colormaps.neon = this.generateColormap([
-      { r: 7, g: 10, b: 20 },
-      { r: 123, g: 44, b: 191 },
-      { r: 247, g: 37, b: 133 },
-      { r: 0, g: 242, b: 254 },
-      { r: 255, g: 255, b: 255 }
-    ]);
-
-    this.colormaps.ocean = this.generateColormap([
-      { r: 4, g: 12, b: 24 },
-      { r: 10, g: 60, b: 110 },
-      { r: 0, g: 180, b: 216 },
-      { r: 0, g: 245, b: 212 },
-      { r: 230, g: 255, b: 250 }
     ]);
   }
 
@@ -107,12 +109,15 @@ class RenderEngine {
   }
 
   renderMacroHeatmap() {
-    const { C, nx, ny } = this.physics;
-    const cmap = this.colormaps[this.colorPaletteName] || this.colormaps.thermal;
+    const { C_A, C_B, nx, ny, viewSolute } = this.physics;
     const data = this.imgData.data;
 
     const scaleX = nx / this.width;
     const scaleY = ny / this.height;
+
+    const cmapA = this.colormaps.soluteA;
+    const cmapB = this.colormaps.soluteB;
+    const cmapDefault = this.colormaps[this.colorPaletteName] || this.colormaps.thermal;
 
     for (let py = 0; py < this.height; py++) {
       const gy = py * scaleY;
@@ -126,22 +131,45 @@ class RenderEngine {
         const x1 = Math.min(nx - 1, x0 + 1);
         const wx = gx - x0;
 
-        // Bilinear interpolation
-        const c00 = C[y0 * nx + x0];
-        const c10 = C[y0 * nx + x1];
-        const c01 = C[y1 * nx + x0];
-        const c11 = C[y1 * nx + x1];
+        // Interpolate Solute A concentration
+        const cA00 = C_A[y0 * nx + x0];
+        const cA10 = C_A[y0 * nx + x1];
+        const cA01 = C_A[y1 * nx + x0];
+        const cA11 = C_A[y1 * nx + x1];
+        const valA = Math.max(0, Math.min(1.0, (cA00 + wx * (cA10 - cA00)) + wy * ((cA01 + wx * (cA11 - cA01)) - (cA00 + wx * (cA10 - cA00)))));
 
-        const top = c00 + wx * (c10 - c00);
-        const bottom = c01 + wx * (c11 - c01);
-        const val = Math.max(0, Math.min(1.0, top + wy * (bottom - top)));
+        // Interpolate Solute B concentration
+        const cB00 = C_B[y0 * nx + x0];
+        const cB10 = C_B[y0 * nx + x1];
+        const cB01 = C_B[y1 * nx + x0];
+        const cB11 = C_B[y1 * nx + x1];
+        const valB = Math.max(0, Math.min(1.0, (cB00 + wx * (cB10 - cB00)) + wy * ((cB01 + wx * (cB11 - cB01)) - (cB00 + wx * (cB10 - cB00)))));
 
-        const lutIdx = Math.floor(val * 255);
         const pIdx = (py * this.width + px) * 4;
 
-        data[pIdx + 0] = cmap[lutIdx * 4 + 0];
-        data[pIdx + 1] = cmap[lutIdx * 4 + 1];
-        data[pIdx + 2] = cmap[lutIdx * 4 + 2];
+        if (viewSolute === 'A') {
+          const lutIdx = Math.floor(valA * 255);
+          data[pIdx + 0] = cmapA[lutIdx * 4 + 0];
+          data[pIdx + 1] = cmapA[lutIdx * 4 + 1];
+          data[pIdx + 2] = cmapA[lutIdx * 4 + 2];
+        } else if (viewSolute === 'B') {
+          const lutIdx = Math.floor(valB * 255);
+          data[pIdx + 0] = cmapB[lutIdx * 4 + 0];
+          data[pIdx + 1] = cmapB[lutIdx * 4 + 1];
+          data[pIdx + 2] = cmapB[lutIdx * 4 + 2];
+        } else {
+          // Both Overlay: Composite Red (B) + Blue (A) color channels
+          const lutA = Math.floor(valA * 255);
+          const lutB = Math.floor(valB * 255);
+
+          const r = Math.min(255, Math.round(cmapB[lutB * 4 + 0] * 1.0 + cmapA[lutA * 4 + 0] * 0.2));
+          const g = Math.min(255, Math.round(cmapA[lutA * 4 + 1] * 0.5 + cmapB[lutB * 4 + 1] * 0.4));
+          const b = Math.min(255, Math.round(cmapA[lutA * 4 + 2] * 1.0 + cmapB[lutB * 4 + 2] * 0.15));
+
+          data[pIdx + 0] = r;
+          data[pIdx + 1] = g;
+          data[pIdx + 2] = b;
+        }
         data[pIdx + 3] = 255;
       }
     }
@@ -155,12 +183,10 @@ class RenderEngine {
     const x2 = (memEnd / nx) * this.width;
     const memWidth = x2 - x1;
 
-    // Membrane block background glow
     this.ctx.save();
     this.ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
     this.ctx.fillRect(x1, 0, memWidth, this.height);
 
-    // Membrane borders
     this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.6)';
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([6, 4]);
@@ -172,7 +198,6 @@ class RenderEngine {
     this.ctx.lineTo(x2, this.height);
     this.ctx.stroke();
 
-    // Center label
     this.ctx.setLineDash([]);
     this.ctx.font = '600 12px Inter, sans-serif';
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
@@ -183,144 +208,81 @@ class RenderEngine {
   }
 
   renderIsolines() {
-    const { C, nx, ny } = this.physics;
+    const { C_A, C_B, nx, ny, viewSolute } = this.physics;
     const cellW = this.width / nx;
     const cellH = this.height / ny;
-    const isoLevels = [0.15, 0.3, 0.5, 0.7, 0.85];
+    const isoLevels = [0.15, 0.35, 0.60, 0.80];
 
     this.ctx.save();
     this.ctx.lineWidth = 1.2;
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
 
-    for (let level of isoLevels) {
-      this.ctx.beginPath();
-      for (let y = 0; y < ny - 1; y += 2) {
-        for (let x = 0; x < nx - 1; x += 2) {
-          const v0 = C[y * nx + x];
-          const v1 = C[y * nx + x + 1];
-          const v2 = C[(y + 1) * nx + x];
+    const renderGridIsolines = (grid, strokeColor) => {
+      this.ctx.strokeStyle = strokeColor;
+      for (let level of isoLevels) {
+        this.ctx.beginPath();
+        for (let y = 0; y < ny - 1; y += 2) {
+          for (let x = 0; x < nx - 1; x += 2) {
+            const v0 = grid[y * nx + x];
+            const v1 = grid[y * nx + x + 1];
 
-          if ((v0 - level) * (v1 - level) < 0) {
-            const frac = (level - v0) / (v1 - v0 + 1e-6);
-            const px = (x + frac) * cellW;
-            const py = (y + 0.5) * cellH;
-            this.ctx.moveTo(px, py - 2);
-            this.ctx.lineTo(px, py + 2);
+            if ((v0 - level) * (v1 - level) < 0) {
+              const frac = (level - v0) / (v1 - v0 + 1e-6);
+              const px = (x + frac) * cellW;
+              const py = (y + 0.5) * cellH;
+              this.ctx.moveTo(px, py - 2);
+              this.ctx.lineTo(px, py + 2);
+            }
           }
         }
+        this.ctx.stroke();
       }
-      this.ctx.stroke();
+    };
+
+    if (viewSolute === 'A' || viewSolute === 'both') {
+      renderGridIsolines(C_A, 'rgba(0, 180, 255, 0.5)');
     }
+    if (viewSolute === 'B' || viewSolute === 'both') {
+      renderGridIsolines(C_B, 'rgba(255, 60, 80, 0.5)');
+    }
+
     this.ctx.restore();
   }
 
   renderParticles() {
-    const { particles, nx, ny, params } = this.physics;
+    const { particles, nx, ny, viewSolute } = this.physics;
     const scaleX = this.width / nx;
     const scaleY = this.height / ny;
-
-    const radNm = (params && Number.isFinite(params.radiusNm)) ? params.radiusNm : 0.70;
-    const shape = (params && params.soluteShape) ? params.soluteShape : 'sphere';
-    const aspectRatio = (params && Number.isFinite(params.aspectRatio)) ? Math.max(1.0, params.aspectRatio) : 1.0;
-
-    const baseRadius = Math.max(3.0, Math.min(11.0, 3.0 + (radNm - 0.15) * 3.5));
 
     this.ctx.save();
     for (let p of particles) {
       if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      if (viewSolute === 'A' && p.type !== 'A') continue;
+      if (viewSolute === 'B' && p.type !== 'B') continue;
 
       const cx = p.x * scaleX;
       const cy = p.y * scaleY;
-
-      if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
-
-      const angle = p.angle || 0;
+      const radius = p.radius || (p.type === 'A' ? 3.5 : 3.0);
+      const isA = (p.type === 'A');
 
       this.ctx.save();
       this.ctx.translate(cx, cy);
 
-      if (shape === 'rod') {
-        // 🥖 Rod / Elongated Cylinder (Capsule Geometry)
-        const pLen = baseRadius * Math.sqrt(aspectRatio) * 1.6;
-        const pWidth = Math.max(2.5, (baseRadius / Math.sqrt(aspectRatio)) * 1.2);
-        
-        this.ctx.rotate(angle);
+      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.5, isA ? '#0077ff' : '#ff3344');
+      grad.addColorStop(1, isA ? 'rgba(0, 119, 255, 0)' : 'rgba(255, 51, 68, 0)');
 
-        // Capsule fill & outline
-        const grad = this.ctx.createLinearGradient(-pLen / 2, 0, pLen / 2, 0);
-        grad.addColorStop(0, 'rgba(0, 242, 254, 0.5)');
-        grad.addColorStop(0.5, '#ffffff');
-        grad.addColorStop(1, 'rgba(0, 242, 254, 0.5)');
+      this.ctx.fillStyle = grad;
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      this.ctx.fill();
 
-        this.ctx.fillStyle = grad;
-        this.ctx.strokeStyle = '#00f2fe';
-        this.ctx.lineWidth = 1.2;
-
-        this.ctx.beginPath();
-        if (typeof this.ctx.roundRect === 'function') {
-          this.ctx.roundRect(-pLen / 2, -pWidth / 2, pLen, pWidth, pWidth / 2);
-        } else {
-          this.ctx.rect(-pLen / 2, -pWidth / 2, pLen, pWidth);
-        }
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        // Inner backbone skeletal line
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-        this.ctx.lineWidth = 1.4;
-        this.ctx.beginPath();
-        this.ctx.moveTo(-pLen * 0.35, 0);
-        this.ctx.lineTo(pLen * 0.35, 0);
-        this.ctx.stroke();
-
-      } else if (shape === 'disc') {
-        // 🪙 Disc / Planar Ring (3D Isometric Ellipse & Concentric Ring)
-        const rx = baseRadius * Math.sqrt(aspectRatio) * 1.4;
-        const ry = Math.max(2.5, (baseRadius / Math.sqrt(aspectRatio)) * 0.85);
-
-        this.ctx.rotate(angle);
-
-        const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-        grad.addColorStop(0, '#ffffff');
-        grad.addColorStop(0.5, '#ffb703');
-        grad.addColorStop(1, 'rgba(255, 183, 3, 0.2)');
-
-        this.ctx.fillStyle = grad;
-        this.ctx.strokeStyle = '#ffb703';
-        this.ctx.lineWidth = 1.4;
-
-        this.ctx.beginPath();
-        this.ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        // Concentric inner ring / torus core
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-        this.ctx.lineWidth = 1.2;
-        this.ctx.beginPath();
-        this.ctx.ellipse(0, 0, rx * 0.45, ry * 0.45, 0, 0, Math.PI * 2);
-        this.ctx.stroke();
-
-      } else {
-        // 🟣 Sphere / Globular (Default)
-        const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, baseRadius);
-        grad.addColorStop(0, '#ffffff');
-        grad.addColorStop(0.5, radNm >= 1.0 ? '#ffb703' : '#00f2fe');
-        grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
-
-        this.ctx.fillStyle = grad;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        if (radNm >= 1.0) {
-          this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-          this.ctx.lineWidth = 1;
-          this.ctx.beginPath();
-          this.ctx.arc(0, 0, baseRadius * 0.45, 0, Math.PI * 2);
-          this.ctx.stroke();
-        }
-      }
+      // Inner core glow
+      this.ctx.strokeStyle = isA ? 'rgba(0, 200, 255, 0.8)' : 'rgba(255, 150, 160, 0.8)';
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+      this.ctx.stroke();
 
       this.ctx.restore();
     }
@@ -328,13 +290,11 @@ class RenderEngine {
   }
 
   renderMicroView() {
-    // Fill deep dark background
     this.ctx.fillStyle = '#060912';
     this.ctx.fillRect(0, 0, this.width, this.height);
 
-    this.renderMacroHeatmap(); // Soft backdrop heatmap
+    this.renderMacroHeatmap();
 
-    // Overlay lipid bilayer structural representation inside membrane block
     const { memStart, memEnd, nx, params, time } = this.physics;
     const { order, fluidity } = params;
 
@@ -343,12 +303,9 @@ class RenderEngine {
     const memWidth = x2 - x1;
 
     this.ctx.save();
-
-    // Dark glass background for lipid core
     this.ctx.fillStyle = 'rgba(10, 16, 30, 0.85)';
     this.ctx.fillRect(x1, 0, memWidth, this.height);
 
-    // Render Lipid Heads & Wavy Hydrophobic Tails
     const numLipids = Math.floor(this.height / 18);
     const tailLength = memWidth * 0.42;
 
@@ -356,24 +313,17 @@ class RenderEngine {
       const yPos = i * 18 + 9;
       const phase = i * 0.5 + time * 4.0 * fluidity;
 
-      // Outer Left Leaflet Lipid Head
       const h1x = x1 + 8;
       this.drawLipidHead(h1x, yPos);
-
-      // Inner Left Leaflet Tail extending right
       const wiggle1 = Math.sin(phase) * (12.0 * (1.0 - 0.7 * order));
       this.drawLipidTail(h1x, yPos, h1x + tailLength, yPos + wiggle1, order);
 
-      // Outer Right Leaflet Lipid Head
       const h2x = x2 - 8;
       this.drawLipidHead(h2x, yPos);
-
-      // Inner Right Leaflet Tail extending left
       const wiggle2 = Math.cos(phase + 1.2) * (12.0 * (1.0 - 0.7 * order));
       this.drawLipidTail(h2x, yPos, h2x - tailLength, yPos + wiggle2, order);
     }
 
-    // Membrane Title Overlay
     this.ctx.font = '600 13px Inter, sans-serif';
     this.ctx.fillStyle = 'rgba(0, 245, 212, 0.9)';
     this.ctx.textAlign = 'center';
@@ -383,7 +333,6 @@ class RenderEngine {
   }
 
   drawLipidHead(x, y) {
-    // Polar hydrophilic head group
     const grad = this.ctx.createRadialGradient(x, y, 0, x, y, 7);
     grad.addColorStop(0, '#00f5d4');
     grad.addColorStop(0.7, '#00b4d8');
@@ -400,7 +349,6 @@ class RenderEngine {
   }
 
   drawLipidTail(xStart, yStart, xEnd, yEnd, order) {
-    // Hydrophobic acyl tails (2 wavy strands)
     this.ctx.save();
     this.ctx.strokeStyle = order > 0.7 ? '#3a86ff' : '#ff006e';
     this.ctx.lineWidth = 1.6;
@@ -408,13 +356,11 @@ class RenderEngine {
 
     const midX = (xStart + xEnd) / 2;
 
-    // Strand A
     this.ctx.beginPath();
     this.ctx.moveTo(xStart, yStart - 2);
     this.ctx.quadraticCurveTo(midX, yStart - 6 + (yEnd - yStart), xEnd, yEnd - 2);
     this.ctx.stroke();
 
-    // Strand B
     this.ctx.beginPath();
     this.ctx.moveTo(xStart, yStart + 2);
     this.ctx.quadraticCurveTo(midX, yStart + 6 + (yEnd - yStart), xEnd, yEnd + 2);
@@ -435,24 +381,19 @@ class RenderEngine {
     const channelH = channelYEnd - channelYStart;
 
     this.ctx.save();
-    // Clear channel cavity
     this.ctx.fillStyle = 'rgba(0, 242, 254, 0.15)';
     this.ctx.fillRect(x1, channelYStart, x2 - x1, channelH);
 
-    // Channel Pore Alpha-Helices (top & bottom proteins)
     this.ctx.fillStyle = '#ffb703';
     this.ctx.strokeStyle = '#fb8500';
     this.ctx.lineWidth = 2;
 
-    // Top protein cylinder
     this.ctx.fillRect(x1 - 4, channelYStart - 8, x2 - x1 + 8, 8);
     this.ctx.strokeRect(x1 - 4, channelYStart - 8, x2 - x1 + 8, 8);
 
-    // Bottom protein cylinder
     this.ctx.fillRect(x1 - 4, channelYEnd, x2 - x1 + 8, 8);
     this.ctx.strokeRect(x1 - 4, channelYEnd, x2 - x1 + 8, 8);
 
-    // Label
     this.ctx.font = '600 11px Inter, sans-serif';
     this.ctx.fillStyle = '#ffb703';
     this.ctx.textAlign = 'center';
@@ -471,14 +412,6 @@ class RenderEngine {
   updateLegendGradient(name) {
     const el = document.getElementById('legend-gradient');
     if (!el) return;
-
-    const gradients = {
-      viridis: 'linear-gradient(to right, #440154, #3b528b, #21918c, #5ec962, #fde725)',
-      plasma: 'linear-gradient(to right, #0d0887, #7e03a8, #cc4778, #f89540, #f0f921)',
-      thermal: 'linear-gradient(to right, #080a12, #a0141e, #f56414, #ffc81e, #fff)',
-      neon: 'linear-gradient(to right, #070a14, #7b2cbf, #f72585, #00f2fe, #fff)',
-      ocean: 'linear-gradient(to right, #040c18, #0a3c6e, #00b4d8, #00f5d4, #e6fffa)'
-    };
-    el.style.background = gradients[name] || gradients.thermal;
+    el.style.background = 'linear-gradient(to right, #0077ff, #7b2cbf, #ff3344)';
   }
 }

@@ -1072,3 +1072,197 @@ details[open] summary.card-title.clickable .chevron-icon {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* Dual Solute Styling */
+.badge-branch {
+  display: inline-block;
+  background: rgba(0, 119, 255, 0.2);
+  color: #0077ff;
+  border: 1px solid rgba(0, 119, 255, 0.4);
+  font-size: 0.70rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.solute-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.view-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.btn-solute-view {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-solute-view:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.btn-solute-view.active {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.dot-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-badge.soluteA {
+  background: #0077ff;
+  box-shadow: 0 0 6px rgba(0, 119, 255, 0.8);
+}
+
+.dot-badge.soluteB {
+  background: #ff3344;
+  box-shadow: 0 0 6px rgba(255, 51, 68, 0.8);
+}
+
+.dot-badge.both {
+  background: linear-gradient(135deg, #0077ff, #ff3344);
+  box-shadow: 0 0 6px rgba(123, 44, 191, 0.8);
+}
+
+.dot-badge.interact {
+  background: #ffb703;
+  box-shadow: 0 0 6px rgba(255, 183, 3, 0.8);
+}
+
+/* Solute Control Tabs */
+.solute-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+}
+
+.solute-tab {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.solute-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.solute-tab.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(0, 242, 254, 0.4);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+}
+
+.solute-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.solute-panel.hidden {
+  display: none;
+}
+
+/* Comparative Metrics Table */
+.dual-metrics-table {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.metrics-table th, .metrics-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.metrics-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.metrics-table .col-soluteA {
+  color: #0077ff;
+}
+
+.metrics-table .col-soluteB {
+  color: #ff3344;
+}
+
+.metrics-table tr.row-highlight {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.metrics-table td.val-blue {
+  color: #0077ff;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.metrics-table td.val-red {
+  color: #ff3344;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.legend-soluteA-lbl {
+  color: #0077ff;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.legend-soluteB-lbl {
+  color: #ff3344;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+

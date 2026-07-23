@@ -1,65 +1,7 @@
-const PARAM_INFO_DICTIONARY = {
-  'lipid-preset': {
-    title: 'Lipid Membrane Composition (POPC Reference)',
-    text: 'Selects experimental lipid membrane compositions. POPC (16:0-18:1 PC) is the standard liquid-disordered (L\u03B1) biological lipid bilayer baseline (Tm = -2\u00B0C). Adding 30% Cholesterol forms a rigid liquid-ordered (Lo) phase, while DPPC at 25\u00B0C represents an ordered gel (L\u03B2\') phase.',
-    impact: 'DPPC gel or Cholesterol-dense membranes drastically increase chain packing order (S ~ 0.85), reducing permeability P by up to 50x.'
-  },
-  'temp': {
-    title: 'Temperature (T)',
-    text: 'System temperature in Celsius and Kelvin (default 37.0\u00B0C / 310.15 K human body temperature). Controls thermal kinetic energy (k_B T) and liquid viscosity.',
-    impact: 'Higher temperature increases water self-diffusion (2.3e-5 cm\u00B2/s at 25\u00B0C -> 3.0e-5 cm\u00B2/s at 37\u00B0C), fluidizes lipid acyl chains (higher \u03B7, lower S), and accelerates permeation. Excessive heat (>45\u00B0C) destabilizes membrane structural order!'
-  },
-  'order': {
-    title: 'Lipid Order Parameter (S)',
-    text: 'Quantifies the average orientation of lipid acyl chains relative to the membrane normal (S = 0.1 for fluid L\u03B1 phase, S = 0.95 for rigid gel L\u03B2 phase). POPC reference at 37\u00B0C has S \u2248 0.60.',
-    impact: 'Higher order aligns lipid tails tightly, creating a dense steric packing barrier that sharply lowers membrane diffusion D_mem and permeability P.'
-  },
-  'fluidity': {
-    title: 'Membrane Fluidity (\u03B7)',
-    text: 'Measures lateral mobility, free volume, and rotational flexibility within the hydrophobic lipid core.',
-    impact: 'Higher fluidity increases free-volume cavity formation inside the membrane core, accelerating solute translocation.'
-  },
-  'thickness': {
-    title: 'Membrane Thickness (d)',
-    text: 'Distance across the hydrophobic lipid bilayer core (typically 3.9 - 4.5 nm for POPC bilayers).',
-    impact: 'Thicker membranes increase diffusion path length. Permeability scales inversely (P = K\u00B7D_mem / d), while theoretical lag time increases quadratically (\u03C4 = d\u00B2 / 6D_mem).'
-  },
-  'solute-type': {
-    title: 'Solute Category & Molecular Weight (MW)',
-    text: 'Categorizes solutes from tiny water molecules (18 Da) up to large biopolymers (3000 Da).',
-    impact: 'Larger molecular weight increases equivalent hydrodynamic radius (Req \u221D MW^(1/3)), increasing hydrodynamic drag in water and steric hindrance inside lipid tails.'
-  },
-  'solute-shape': {
-    title: 'Molecular Shape Geometry',
-    text: 'Sets molecular geometry (Sphere, Rod, or Disc). Hydrodynamic drag is governed by Perrin ellipsoid friction theory (f_shape).',
-    impact: 'Rods and flat discs experience higher friction drag (f_shape > 1.0) than isometric spheres, slowing water diffusion and membrane permeation.'
-  },
-  'aspect-ratio': {
-    title: 'Aspect Ratio (p = a/b)',
-    text: 'Length-to-width ratio of prolate (rod) or oblate (disc) ellipsoids (p = 1.0 for spheres, p = 4.0 for elongated rods/discs).',
-    impact: 'Higher aspect ratio increases Perrin drag factor f_shape, slowing overall diffusion speed.'
-  },
-  'radius': {
-    title: 'Hydrodynamic Radius (r_h)',
-    text: 'Effective Stokes-Einstein radius of the solute molecule in solution.',
-    impact: 'Aqueous diffusion scales inversely with r_h (D_water \u221D 1/r_h). Inside lipid core, larger radius faces additional steric hindrance.'
-  },
-  'partition': {
-    title: 'Partition Coefficient (K = C_mem / C_water)',
-    text: 'Thermodynamic equilibrium ratio of solute concentration inside hydrophobic lipid core relative to water (Overton\'s Rule).',
-    impact: 'Lipophilic compounds (K > 1) dissolve strongly into lipid core, creating high concentration gradient and accelerating steady-state flux J_ss.'
-  },
-  'solute-conc': {
-    title: 'Donor Initial Concentration (C\u2080)',
-    text: 'Sets the initial solute concentration in the donor (left) compartment (0.1 to 5.0 mM).',
-    impact: 'According to Fick\'s First Law of Diffusion (J = P \u00B7 \u0394C), higher donor concentration creates a steeper concentration gradient across the membrane, driving higher molar flux J per unit time and scaling displayed particle population density.'
-  },
-  'channel': {
-    title: 'Transmembrane Pore Channel',
-    text: 'Inserts an aqueous protein pore across the hydrophobic lipid membrane slab.',
-    impact: 'Allows hydrophilic or charged solutes (low K) to bypass the hydrophobic lipid core and diffuse rapidly through the aqueous pore.'
-  }
-};
+/**
+ * controls.js - Dynamic UI Control Manager for Dual-Solute 2D Permeability Simulator
+ * Wire up Solute A (Blue), Solute B (Red), Interaction Sliders, View Modes, and Comparative Metrics.
+ */
 
 class ControlsManager {
   constructor(physics, render, charts) {
@@ -69,7 +11,6 @@ class ControlsManager {
 
     this.isMouseDown = false;
     this.activePaintTool = 'source'; // 'source', 'sink', 'erase'
-    this.isLogPMode = false;
 
     this.initEventListeners();
     this.updateMetricsUI();
@@ -96,143 +37,165 @@ class ControlsManager {
       });
     }
 
-    // Lipid Membrane Presets (POPC Baseline Reference)
-    const lipidPresets = {
-      popc:          { order: 0.60, fluidity: 0.55, thickness: 3.9, temp: 37.0 },
-      popc_chol:     { order: 0.82, fluidity: 0.35, thickness: 4.3, temp: 37.0 },
-      dppc_gel:      { order: 0.88, fluidity: 0.10, thickness: 4.7, temp: 25.0 },
-      ecoli:         { order: 0.68, fluidity: 0.45, thickness: 4.1, temp: 37.0 },
-      sphingomyelin: { order: 0.78, fluidity: 0.25, thickness: 6.0, temp: 37.0 }
+    // Solute View Mode Toggle (Both, Solute A, Solute B)
+    const btnViewBoth = document.getElementById('btn-view-both');
+    const btnViewA = document.getElementById('btn-view-soluteA');
+    const btnViewB = document.getElementById('btn-view-soluteB');
+
+    const setSoluteView = (viewMode) => {
+      this.physics.viewSolute = viewMode;
+      [btnViewBoth, btnViewA, btnViewB].forEach(btn => btn && btn.classList.remove('active'));
+      if (viewMode === 'A' && btnViewA) btnViewA.classList.add('active');
+      else if (viewMode === 'B' && btnViewB) btnViewB.classList.add('active');
+      else if (btnViewBoth) btnViewBoth.classList.add('active');
     };
 
-    const selectLipidPreset = document.getElementById('select-lipid-preset');
-    if (selectLipidPreset) {
-      selectLipidPreset.addEventListener('change', (e) => {
-        const lp = lipidPresets[e.target.value] || lipidPresets.popc;
-        this.physics.params.lipidPreset = e.target.value;
-        this.physics.params.order = lp.order;
-        this.physics.params.fluidity = lp.fluidity;
-        this.physics.params.thicknessNm = lp.thickness;
-        this.physics.params.tempC = lp.temp;
-        this.physics.updateMembraneGeometry();
-        this.physics.rebuildDiffusionMap();
-        this.syncSlidersFromPhysics();
-        this.updateMetricsUI();
-      });
-    }
+    if (btnViewBoth) btnViewBoth.addEventListener('click', () => setSoluteView('both'));
+    if (btnViewA) btnViewA.addEventListener('click', () => setSoluteView('A'));
+    if (btnViewB) btnViewB.addEventListener('click', () => setSoluteView('B'));
 
-    // Parameter Info Modal System (i Buttons)
-    const infoModalBackdrop = document.getElementById('info-modal-backdrop');
-    const infoModalClose = document.getElementById('info-modal-close');
-    const infoModalHeading = document.getElementById('info-modal-heading');
-    const infoModalText = document.getElementById('info-modal-text');
-    const infoModalImpact = document.getElementById('info-modal-impact');
+    // Solute Parameter Tabs (Solute A, Solute B, Interactions)
+    const tabA = document.getElementById('tab-soluteA');
+    const tabB = document.getElementById('tab-soluteB');
+    const tabInteract = document.getElementById('tab-interact');
 
-    const openInfoModal = (paramKey) => {
-      const data = PARAM_INFO_DICTIONARY[paramKey];
-      if (data && infoModalBackdrop) {
-        if (infoModalHeading) infoModalHeading.textContent = data.title;
-        if (infoModalText) infoModalText.textContent = data.text;
-        if (infoModalImpact) infoModalImpact.textContent = data.impact;
-        infoModalBackdrop.classList.remove('hidden');
+    const panelA = document.getElementById('panel-soluteA');
+    const panelB = document.getElementById('panel-soluteB');
+    const panelInteract = document.getElementById('panel-interact');
+
+    const switchSoluteTab = (targetTab) => {
+      [tabA, tabB, tabInteract].forEach(t => t && t.classList.remove('active'));
+      [panelA, panelB, panelInteract].forEach(p => p && p.classList.add('hidden'));
+
+      if (targetTab === 'soluteA') {
+        if (tabA) tabA.classList.add('active');
+        if (panelA) panelA.classList.remove('hidden');
+      } else if (targetTab === 'soluteB') {
+        if (tabB) tabB.classList.add('active');
+        if (panelB) panelB.classList.remove('hidden');
+      } else if (targetTab === 'interact') {
+        if (tabInteract) tabInteract.classList.add('active');
+        if (panelInteract) panelInteract.classList.remove('hidden');
       }
     };
 
-    const closeInfoModal = () => {
-      if (infoModalBackdrop) infoModalBackdrop.classList.add('hidden');
-    };
+    if (tabA) tabA.addEventListener('click', () => switchSoluteTab('soluteA'));
+    if (tabB) tabB.addEventListener('click', () => switchSoluteTab('soluteB'));
+    if (tabInteract) tabInteract.addEventListener('click', () => switchSoluteTab('interact'));
 
-    document.querySelectorAll('.info-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const paramKey = btn.getAttribute('data-info');
-        openInfoModal(paramKey);
-      });
-    });
-
-    if (infoModalClose) infoModalClose.addEventListener('click', closeInfoModal);
-    if (infoModalBackdrop) {
-      infoModalBackdrop.addEventListener('click', (e) => {
-        if (e.target === infoModalBackdrop) closeInfoModal();
-      });
-    }
-
-    // 2. Solute Category & Size Controls (Calibrated with MolMeDB Data)
+    // Preset Solute Selection for Solute A and Solute B
     const solutePresets = {
-      water:        { mw: 18,   radius: 0.15, partitionK: 0.20, shape: 'sphere', aspect: 1.0 },
-      ion:          { mw: 30,   radius: 0.25, partitionK: 0.05, shape: 'sphere', aspect: 1.0 },
-      small_organic:{ mw: 100,  radius: 0.40, partitionK: 0.80, shape: 'sphere', aspect: 1.0 },
-      ibuprofen:    { mw: 206,  radius: 0.45, partitionK: 3.05, shape: 'disc',   aspect: 2.4 }, // MolMeDB MM00045
-      drug:         { mw: 300,  radius: 0.70, partitionK: 1.20, shape: 'sphere', aspect: 1.0 },
-      macrocycle:   { mw: 1000, radius: 1.20, partitionK: 2.20, shape: 'disc',   aspect: 1.8 },
-      biopolymer:   { mw: 3000, radius: 2.00, partitionK: 0.10, shape: 'rod',    aspect: 3.5 }
+      ibuprofen:    { name: 'Ibuprofen', mw: 206, radius: 0.45, partitionK: 3.05, hydration: 0.20, affinity: 0.85 },
+      caffeine:     { name: 'Caffeine', mw: 194, radius: 0.38, partitionK: 0.15, hydration: 0.65, affinity: 0.15 },
+      water:        { name: 'Water', mw: 18, radius: 0.15, partitionK: 0.20, hydration: 0.90, affinity: 0.05 },
+      ion:          { name: 'Ion Na⁺/Cl⁻', mw: 30, radius: 0.25, partitionK: 0.05, hydration: 0.95, affinity: 0.01 },
+      small_organic:{ name: 'Small Organic', mw: 100, radius: 0.40, partitionK: 0.80, hydration: 0.40, affinity: 0.40 },
+      macrocycle:   { name: 'Macrocycle', mw: 1000, radius: 1.20, partitionK: 2.20, hydration: 0.30, affinity: 0.70 },
+      biopolymer:   { name: 'Biopolymer', mw: 3000, radius: 2.00, partitionK: 0.10, hydration: 0.80, affinity: 0.10 }
     };
 
-    const selectSoluteType = document.getElementById('select-solute-type');
-    if (selectSoluteType) {
-      selectSoluteType.addEventListener('change', (e) => {
-        const cat = solutePresets[e.target.value] || solutePresets.ibuprofen;
-        this.physics.params.soluteType = e.target.value;
-        this.physics.params.mwDa = cat.mw;
-        this.physics.params.radiusNm = cat.radius;
-        this.physics.params.partitionK = cat.partitionK;
-        if (cat.shape) this.physics.params.soluteShape = cat.shape;
-        if (cat.aspect) this.physics.params.aspectRatio = cat.aspect;
+    const applySolutePreset = (soluteKey, presetObj) => {
+      const spec = (soluteKey === 'A') ? this.physics.params.soluteA : this.physics.params.soluteB;
+      spec.name = presetObj.name;
+      spec.mwDa = presetObj.mw;
+      spec.radiusNm = presetObj.radius;
+      spec.partitionK = presetObj.partitionK;
+      spec.hydration = presetObj.hydration;
+      spec.membraneAffinity = presetObj.affinity;
 
-        this.physics.params.manualRadiusOverride = false;
-        this.physics.rebuildDiffusionMap();
-        this.syncSlidersFromPhysics();
-        this.updateMetricsUI();
-      });
-    }
-
-    // Solute Shape Selector & Aspect Ratio Slider
-    const selectSoluteShape = document.getElementById('select-solute-shape');
-    if (selectSoluteShape) {
-      selectSoluteShape.addEventListener('change', (e) => {
-        this.physics.params.soluteShape = e.target.value;
-        this.physics.params.manualRadiusOverride = false;
-        this.physics.rebuildDiffusionMap();
-        this.syncSlidersFromPhysics();
-        this.updateMetricsUI();
-      });
-    }
-
-    this.bindSlider('slider-aspect', 'val-aspect', (val) => {
-      this.physics.params.aspectRatio = parseFloat(val);
-      this.physics.params.manualRadiusOverride = false;
       this.physics.rebuildDiffusionMap();
       this.syncSlidersFromPhysics();
-    }, (val) => {
-      const p = parseFloat(val);
-      const shape = this.physics.params.soluteShape || 'sphere';
-      if (shape === 'sphere' || p <= 1.05) return '1.0 (Sphere)';
-      return `${p.toFixed(1)} (${shape === 'rod' ? 'Rod' : 'Disc'})`;
+      this.updateMetricsUI();
+    };
+
+    const selA = document.getElementById('select-soluteA-type');
+    if (selA) {
+      selA.addEventListener('change', (e) => {
+        const p = solutePresets[e.target.value] || solutePresets.ibuprofen;
+        applySolutePreset('A', p);
+      });
+    }
+
+    const selB = document.getElementById('select-soluteB-type');
+    if (selB) {
+      selB.addEventListener('change', (e) => {
+        const p = solutePresets[e.target.value] || solutePresets.caffeine;
+        applySolutePreset('B', p);
+      });
+    }
+
+    // Bind Solute A Sliders
+    this.bindSlider('slider-soluteA-partition', 'val-soluteA-partition', (v) => {
+      this.physics.params.soluteA.partitionK = parseFloat(v);
+      this.physics.rebuildDiffusionMap();
     });
 
-    this.bindSlider('slider-radius', 'val-radius', (val) => {
-      this.physics.params.radiusNm = parseFloat(val);
-      this.physics.params.manualRadiusOverride = true;
-      this.physics.rebuildDiffusionMap();
-    }, (val) => `${parseFloat(val).toFixed(2)} nm`);
-
-    this.bindSlider('slider-solute-conc', 'val-solute-conc', (val) => {
-      this.physics.params.initialConc = parseFloat(val);
+    this.bindSlider('slider-soluteA-conc', 'val-soluteA-conc', (v) => {
+      this.physics.params.soluteA.initialConc = parseFloat(v);
       this.physics.resetScenario();
-    }, (val) => `${parseFloat(val).toFixed(1)} mM`);
+    }, (v) => `${parseFloat(v).toFixed(1)} mM`);
+
+    this.bindSlider('slider-soluteA-radius', 'val-soluteA-radius', (v) => {
+      this.physics.params.soluteA.radiusNm = parseFloat(v);
+      this.physics.params.soluteA.manualRadiusOverride = true;
+      this.physics.rebuildDiffusionMap();
+    }, (v) => `${parseFloat(v).toFixed(2)} nm`);
+
+    this.bindSlider('slider-soluteA-hydration', 'val-soluteA-hydration', (v) => {
+      this.physics.params.soluteA.hydration = parseFloat(v);
+      this.physics.rebuildDiffusionMap();
+    });
+
+    this.bindSlider('slider-soluteA-affinity', 'val-soluteA-affinity', (v) => {
+      this.physics.params.soluteA.membraneAffinity = parseFloat(v);
+      this.physics.rebuildDiffusionMap();
+    });
+
+    // Bind Solute B Sliders
+    this.bindSlider('slider-soluteB-partition', 'val-soluteB-partition', (v) => {
+      this.physics.params.soluteB.partitionK = parseFloat(v);
+      this.physics.rebuildDiffusionMap();
+    });
+
+    this.bindSlider('slider-soluteB-conc', 'val-soluteB-conc', (v) => {
+      this.physics.params.soluteB.initialConc = parseFloat(v);
+      this.physics.resetScenario();
+    }, (v) => `${parseFloat(v).toFixed(1)} mM`);
+
+    this.bindSlider('slider-soluteB-radius', 'val-soluteB-radius', (v) => {
+      this.physics.params.soluteB.radiusNm = parseFloat(v);
+      this.physics.params.soluteB.manualRadiusOverride = true;
+      this.physics.rebuildDiffusionMap();
+    }, (v) => `${parseFloat(v).toFixed(2)} nm`);
+
+    this.bindSlider('slider-soluteB-hydration', 'val-soluteB-hydration', (v) => {
+      this.physics.params.soluteB.hydration = parseFloat(v);
+      this.physics.rebuildDiffusionMap();
+    });
+
+    this.bindSlider('slider-soluteB-affinity', 'val-soluteB-affinity', (v) => {
+      this.physics.params.soluteB.membraneAffinity = parseFloat(v);
+      this.physics.rebuildDiffusionMap();
+    });
+
+    // Cross-Solute Interaction Slider
+    this.bindSlider('slider-interact-AB', 'val-interact-AB', (v) => {
+      const val = parseFloat(v);
+      this.physics.params.interactAB = val;
+    }, (v) => {
+      const val = parseFloat(v);
+      if (val < -0.05) return `${val.toFixed(2)} (Attraction)`;
+      if (val > 0.05) return `${val.toFixed(2)} (Crowding)`;
+      return `0.00 (Independent)`;
+    });
 
     // Temperature Control Slider
     this.bindSlider('slider-temp', 'val-temp', (val) => {
       this.physics.params.tempC = parseFloat(val);
       this.physics.rebuildDiffusionMap();
-    }, (val) => {
-      const c = parseFloat(val);
-      const k = (c + 273.15).toFixed(2);
-      return `${c.toFixed(1)} \u00B0C (${k} K)`;
-    });
+    }, (val) => `${parseFloat(val).toFixed(1)} \u00B0C`);
 
-    // 3. Membrane & Physics Sliders
+    // Membrane Sliders
     this.bindSlider('slider-order', 'val-order', (val) => {
       this.physics.params.order = parseFloat(val);
       this.physics.rebuildDiffusionMap();
@@ -249,16 +212,6 @@ class ControlsManager {
       this.physics.rebuildDiffusionMap();
     }, (val) => `${parseFloat(val).toFixed(1)} nm`);
 
-    this.bindSlider('slider-partition', 'val-partition', (val) => {
-      this.physics.params.partitionK = parseFloat(val);
-      this.physics.rebuildDiffusionMap();
-    });
-
-    this.bindSlider('slider-dwater', 'val-dwater', (val) => {
-      this.physics.params.dBase = parseFloat(val);
-      this.physics.rebuildDiffusionMap();
-    }, (val) => `${parseFloat(val).toFixed(2)} cm²/s`);
-
     // Channel Pore Checkbox
     const chkChannel = document.getElementById('chk-channel');
     if (chkChannel) {
@@ -269,17 +222,15 @@ class ControlsManager {
       });
     }
 
-    // 3. View Mode Toggles
+    // View Mode Toggles (Macro / Micro)
     const btnMacro = document.getElementById('mode-macro');
     const btnMicro = document.getElementById('mode-micro');
-
     if (btnMacro && btnMicro) {
       btnMacro.addEventListener('click', () => {
         btnMacro.classList.add('active');
         btnMicro.classList.remove('active');
         this.render.viewMode = 'macro';
       });
-
       btnMicro.addEventListener('click', () => {
         btnMicro.classList.add('active');
         btnMacro.classList.remove('active');
@@ -287,7 +238,7 @@ class ControlsManager {
       });
     }
 
-    // 4. Paint Tool Selection
+    // Paint Tool Selection
     const toolButtons = document.querySelectorAll('.btn-tool');
     toolButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -297,7 +248,7 @@ class ControlsManager {
       });
     });
 
-    // 5. Canvas Painting Interaction
+    // Canvas Painting Interaction
     const canvas = this.render.canvas;
     canvas.addEventListener('mousedown', (e) => {
       this.isMouseDown = true;
@@ -314,15 +265,43 @@ class ControlsManager {
       this.isMouseDown = false;
     });
 
-    // 6. Colormap Selector
-    const colorSelect = document.getElementById('color-palette');
-    if (colorSelect) {
-      colorSelect.addEventListener('change', (e) => {
-        this.render.setColormap(e.target.value);
+    // Rate Controls
+    const speedSlider = document.getElementById('sim-speed');
+    const speedValDisplay = document.getElementById('speed-val');
+
+    const updateRate = (rateSecPerSec) => {
+      this.physics.params.speedMultiplier = rateSecPerSec;
+      let displayStr = `${rateSecPerSec.toFixed(0)}s/s`;
+      if (rateSecPerSec >= 3600) displayStr = `${(rateSecPerSec / 3600).toFixed(1)}h/s`;
+      else if (rateSecPerSec >= 60) displayStr = `${(rateSecPerSec / 60).toFixed(1)}m/s`;
+
+      if (speedValDisplay) speedValDisplay.textContent = displayStr;
+
+      document.querySelectorAll('.btn-speed-preset').forEach((btn) => {
+        const btnRate = parseFloat(btn.dataset.rate);
+        if (Math.abs(btnRate - rateSecPerSec) < 0.5) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+    };
+
+    if (speedSlider) {
+      speedSlider.addEventListener('input', (e) => {
+        const sliderVal = parseFloat(e.target.value);
+        const rate = Math.pow(3600, (sliderVal - 1) / 99.0);
+        updateRate(rate);
       });
     }
 
-    // 7. Toggles
+    document.querySelectorAll('.btn-speed-preset').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetRate = parseFloat(btn.dataset.rate);
+        const sliderVal = 1.0 + 99.0 * (Math.log(targetRate) / Math.log(3600));
+        if (speedSlider) speedSlider.value = sliderVal;
+        updateRate(targetRate);
+      });
+    });
+
+    // Toggles
     const chkIsolines = document.getElementById('chk-isolines');
     if (chkIsolines) {
       chkIsolines.addEventListener('change', (e) => {
@@ -337,66 +316,23 @@ class ControlsManager {
       });
     }
 
-    // 8. Rate Controls & Preset Speedup Buttons (1s, 10s, 1min, 10min, 1h per sec)
-    const speedSlider = document.getElementById('sim-speed');
-    const speedValDisplay = document.getElementById('speed-val');
-
-    const updateRate = (rateSecPerSec) => {
-      this.physics.params.speedMultiplier = rateSecPerSec;
-
-      let displayStr = `${rateSecPerSec.toFixed(0)}s/s`;
-      if (rateSecPerSec >= 3600) {
-        displayStr = `${(rateSecPerSec / 3600).toFixed(1)}h/s`;
-      } else if (rateSecPerSec >= 60) {
-        displayStr = `${(rateSecPerSec / 60).toFixed(1)}m/s`;
-      }
-
-      if (speedValDisplay) speedValDisplay.textContent = displayStr;
-
-      // Update preset button active states
-      document.querySelectorAll('.btn-speed-preset').forEach((btn) => {
-        const btnRate = parseFloat(btn.dataset.rate);
-        if (Math.abs(btnRate - rateSecPerSec) < 0.5) {
-          btn.classList.add('active');
+    // 1D Profile Scale Toggle (Auto-Fit vs Log10)
+    const btnToggleScale = document.getElementById('btn-toggle-profile-scale');
+    const labelToggleScale = document.getElementById('profile-scale-label');
+    if (btnToggleScale) {
+      btnToggleScale.addEventListener('click', () => {
+        if (this.charts.profileScaleMode === 'auto') {
+          this.charts.profileScaleMode = 'log';
+          btnToggleScale.classList.add('active');
+          if (labelToggleScale) labelToggleScale.textContent = 'Log10 Scale';
         } else {
-          btn.classList.remove('active');
+          this.charts.profileScaleMode = 'auto';
+          btnToggleScale.classList.remove('active');
+          if (labelToggleScale) labelToggleScale.textContent = 'Auto-Fit Y';
         }
-      });
-    };
-
-    if (speedSlider) {
-      speedSlider.addEventListener('input', (e) => {
-        const sliderVal = parseFloat(e.target.value);
-        // Exponential scale mapping from slider 1..100 to rate 1s/s .. 3600s/s
-        const rate = Math.pow(3600, (sliderVal - 1) / 99.0);
-        updateRate(rate);
       });
     }
 
-    document.querySelectorAll('.btn-speed-preset').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const targetRate = parseFloat(btn.dataset.rate);
-        // Inverse mapping to slider val
-        const sliderVal = 1.0 + 99.0 * (Math.log(targetRate) / Math.log(3600));
-        if (speedSlider) speedSlider.value = sliderVal;
-        updateRate(targetRate);
-      });
-    });
-    // 9. log10(P) Mode Toggle Button
-    const btnToggleLogP = document.getElementById('btn-toggle-logp');
-    if (btnToggleLogP) {
-      btnToggleLogP.addEventListener('click', () => {
-        this.isLogPMode = !this.isLogPMode;
-        if (this.isLogPMode) {
-          btnToggleLogP.classList.add('active');
-        } else {
-          btnToggleLogP.classList.remove('active');
-        }
-        this.updateMetricsUI();
-      });
-    }
-
-    // Guarantee 100% slider & badge synchronization on initialization
     this.syncSlidersFromPhysics();
     this.updateMetricsUI();
   }
@@ -426,11 +362,14 @@ class ControlsManager {
     const gridX = Math.floor(clickX * scaleX);
     const gridY = Math.floor(clickY * scaleY);
 
-    this.physics.paintSolute(gridX, gridY, 5, this.activePaintTool);
+    const soluteTarget = (this.physics.viewSolute === 'B') ? 'B' : 'A';
+    this.physics.paintSolute(gridX, gridY, 5, this.activePaintTool, soluteTarget);
   }
 
   syncSlidersFromPhysics() {
-    const { order, fluidity, thicknessNm, partitionK, initialConc, dBase, radiusNm, mwDa, soluteType, soluteShape, aspectRatio, tempC, hasChannel } = this.physics.params;
+    const p = this.physics.params;
+    const sA = p.soluteA;
+    const sB = p.soluteB;
 
     const setVal = (id, badgeId, val, formatted) => {
       const slider = document.getElementById(id);
@@ -439,69 +378,56 @@ class ControlsManager {
       if (badge) badge.textContent = formatted;
     };
 
-    const p = aspectRatio || 1.0;
-    const shape = soluteShape || 'sphere';
-    const fShape = this.physics.getPerrinShapeFactor(shape, p);
-    const conc = initialConc !== undefined ? initialConc : 1.0;
+    // Solute A sliders
+    setVal('slider-soluteA-partition', 'val-soluteA-partition', sA.partitionK, sA.partitionK.toFixed(2));
+    setVal('slider-soluteA-conc', 'val-soluteA-conc', sA.initialConc, `${sA.initialConc.toFixed(1)} mM`);
+    setVal('slider-soluteA-radius', 'val-soluteA-radius', sA.radiusNm, `${sA.radiusNm.toFixed(2)} nm`);
+    setVal('slider-soluteA-hydration', 'val-soluteA-hydration', sA.hydration || 0, (sA.hydration || 0).toFixed(2));
+    setVal('slider-soluteA-affinity', 'val-soluteA-affinity', sA.membraneAffinity || 0.5, (sA.membraneAffinity || 0.5).toFixed(2));
 
-    setVal('slider-radius', 'val-radius', radiusNm, `${radiusNm.toFixed(2)} nm`);
-    setVal('slider-solute-conc', 'val-solute-conc', conc, `${conc.toFixed(1)} mM`);
-    setVal('slider-aspect', 'val-aspect', p, p <= 1.05 ? '1.0 (Sphere)' : `${p.toFixed(1)} (${shape === 'rod' ? 'Rod' : 'Disc'})`);
-    setVal('slider-temp', 'val-temp', tempC || 37.0, `${(tempC || 37.0).toFixed(1)} \u00B0C (${((tempC || 37.0) + 273.15).toFixed(2)} K)`);
-    setVal('slider-order', 'val-order', order, order.toFixed(2));
-    setVal('slider-fluidity', 'val-fluidity', fluidity, fluidity.toFixed(2));
-    setVal('slider-thickness', 'val-thickness', thicknessNm, `${thicknessNm.toFixed(1)} nm`);
-    setVal('slider-partition', 'val-partition', partitionK, partitionK.toFixed(2));
+    // Solute B sliders
+    setVal('slider-soluteB-partition', 'val-soluteB-partition', sB.partitionK, sB.partitionK.toFixed(2));
+    setVal('slider-soluteB-conc', 'val-soluteB-conc', sB.initialConc, `${sB.initialConc.toFixed(1)} mM`);
+    setVal('slider-soluteB-radius', 'val-soluteB-radius', sB.radiusNm, `${sB.radiusNm.toFixed(2)} nm`);
+    setVal('slider-soluteB-hydration', 'val-soluteB-hydration', sB.hydration || 0, (sB.hydration || 0).toFixed(2));
+    setVal('slider-soluteB-affinity', 'val-soluteB-affinity', sB.membraneAffinity || 0.5, (sB.membraneAffinity || 0.5).toFixed(2));
 
-    const selectSoluteType = document.getElementById('select-solute-type');
-    if (selectSoluteType) selectSoluteType.value = soluteType;
+    // Interaction slider
+    setVal('slider-interact-AB', 'val-interact-AB', p.interactAB || 0, (p.interactAB || 0).toFixed(2));
 
-    const selectSoluteShape = document.getElementById('select-solute-shape');
-    if (selectSoluteShape) selectSoluteShape.value = shape;
-
-    const shapeBadge = document.getElementById('val-shape-factor');
-    if (shapeBadge) {
-      const shapeName = shape === 'rod' ? 'Rod' : (shape === 'disc' ? 'Disc' : 'Sphere');
-      shapeBadge.textContent = `${shapeName} (f = ${fShape.toFixed(2)})`;
-    }
-
-    const mwBadge = document.getElementById('val-solute-mw');
-    if (mwBadge) mwBadge.textContent = `${mwDa} Da`;
+    // Membrane sliders
+    setVal('slider-temp', 'val-temp', p.tempC || 37.0, `${(p.tempC || 37.0).toFixed(1)} \u00B0C`);
+    setVal('slider-order', 'val-order', p.order, p.order.toFixed(2));
+    setVal('slider-fluidity', 'val-fluidity', p.fluidity, p.fluidity.toFixed(2));
+    setVal('slider-thickness', 'val-thickness', p.thicknessNm, `${p.thicknessNm.toFixed(1)} nm`);
 
     const chkChannel = document.getElementById('chk-channel');
-    if (chkChannel) chkChannel.checked = hasChannel;
-  }
-
-  cacheMetricsElements() {
-    this.dWatEl = document.getElementById('metric-dwat');
-    this.dMemEl = document.getElementById('metric-dmem');
-    this.pEl = document.getElementById('metric-p');
-    this.pTitleEl = document.getElementById('metric-p-title');
-    this.pUnitEl = document.getElementById('metric-p-unit');
-    this.lagEl = document.getElementById('metric-lag');
-    this.fluxEl = document.getElementById('metric-flux');
+    if (chkChannel) chkChannel.checked = p.hasChannel;
   }
 
   updateMetricsUI() {
-    if (!this.dWatEl) this.cacheMetricsElements();
     const metrics = this.physics.getCalculatedMetrics();
-    
-    if (this.dWatEl) this.dWatEl.textContent = metrics.dWaterCm2s;
-    if (this.dMemEl) this.dMemEl.textContent = metrics.dMem;
-    
-    if (this.pEl) {
-      if (this.isLogPMode) {
-        if (this.pTitleEl) this.pTitleEl.innerHTML = 'Log Permeability (<i>log<sub>10</sub>P</i> &plusmn; &sigma;)';
-        this.pEl.textContent = metrics.logP_str;
-        if (this.pUnitEl) this.pUnitEl.textContent = 'log10(cm/s)';
-      } else {
-        if (this.pTitleEl) this.pTitleEl.innerHTML = 'Permeability (<i>P</i> &plusmn; &sigma;)';
-        this.pEl.textContent = metrics.P_str;
-        if (this.pUnitEl) this.pUnitEl.textContent = 'cm/s';
-      }
-    }
 
-    if (this.lagEl) this.lagEl.textContent = metrics.lagTime;
-    if (this.fluxEl) this.fluxEl.textContent = metrics.steadyStateFlux;
+    const setElemText = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    };
+
+    setElemText('val-metrics-temp', metrics.tempC);
+    setElemText('val-metrics-chi', metrics.interactAB);
+
+    // Solute A metrics
+    setElemText('m-dwat-A', `${metrics.soluteA.dWaterCm2s} cm²/s`);
+    setElemText('m-dmem-A', `${metrics.soluteA.dMemCm2s} cm²/s`);
+    setElemText('m-P-A', `${metrics.soluteA.P_str} cm/s`);
+    setElemText('m-logP-A', metrics.soluteA.logP_str);
+    setElemText('m-lag-A', metrics.soluteA.lagTimePhys);
+
+    // Solute B metrics
+    setElemText('m-dwat-B', `${metrics.soluteB.dWaterCm2s} cm²/s`);
+    setElemText('m-dmem-B', `${metrics.soluteB.dMemCm2s} cm²/s`);
+    setElemText('m-P-B', `${metrics.soluteB.P_str} cm/s`);
+    setElemText('m-logP-B', metrics.soluteB.logP_str);
+    setElemText('m-lag-B', metrics.soluteB.lagTimePhys);
   }
 }
