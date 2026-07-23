@@ -292,16 +292,22 @@ class PhysicsEngine {
           const D_A = 2.0 * Dcenter * this.Dmap[yAbove * nx + x] / (Dcenter + this.Dmap[yAbove * nx + x] + 1e-6);
           const D_B = 2.0 * Dcenter * this.Dmap[yBelow * nx + x] / (Dcenter + this.Dmap[yBelow * nx + x] + 1e-6);
 
-          const fluxLeft  = (x > 0) ? D_L * (this.u[y * nx + xLeft] - uCenter) : 0;
-          const fluxRight = (x < nx - 1) ? D_R * (this.u[y * nx + xRight] - uCenter) : 0;
-          const fluxAbove = (y > 0) ? D_A * (this.u[yAbove * nx + x] - uCenter) : 0;
-          const fluxBelow = (y < ny - 1) ? D_B * (this.u[yBelow * nx + x] - uCenter) : 0;
+          const totalD = D_L + D_R + D_A + D_B;
+          if (totalD < 1e-8) {
+            this.unext[idx] = uCenter;
+            continue;
+          }
 
-          const rawDu = dtSub * (fluxLeft + fluxRight + fluxAbove + fluxBelow);
+          // Weighted average potential of 4-connected neighbors
+          const targetU = (D_L * this.u[y * nx + xLeft] +
+                           D_R * this.u[y * nx + xRight] +
+                           D_A * this.u[yAbove * nx + x] +
+                           D_B * this.u[yBelow * nx + x]) / totalD;
 
-          // Flux limiter for unconditionally stable physical PDE integration across all speed scales
-          const du = rawDu / (1.0 + Math.abs(rawDu));
-          const val = uCenter + du;
+          // Exponential Euler relaxation decay factor: 1 - exp(-totalD * dtSub)
+          // Unconditionally stable (0 <= decay <= 1), ZERO numerical oscillations at high speedup!
+          const decay = 1.0 - Math.exp(-totalD * dtSub);
+          const val = uCenter + decay * (targetU - uCenter);
           this.unext[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
         }
       }
