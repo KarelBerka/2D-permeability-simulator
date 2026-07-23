@@ -220,7 +220,10 @@ class RenderEngine {
     const scaleY = this.height / ny;
 
     const radNm = (params && Number.isFinite(params.radiusNm)) ? params.radiusNm : 0.70;
-    const pRadius = Math.max(2.5, Math.min(10.0, 2.5 + (radNm - 0.15) * 3.5));
+    const shape = (params && params.soluteShape) ? params.soluteShape : 'sphere';
+    const aspectRatio = (params && Number.isFinite(params.aspectRatio)) ? Math.max(1.0, params.aspectRatio) : 1.0;
+
+    const baseRadius = Math.max(3.0, Math.min(11.0, 3.0 + (radNm - 0.15) * 3.5));
 
     this.ctx.save();
     for (let p of particles) {
@@ -231,25 +234,95 @@ class RenderEngine {
 
       if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
 
-      // Solute sphere with glowing core
-      const grad = this.ctx.createRadialGradient(cx, cy, 0, cx, cy, pRadius);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.5, radNm >= 1.0 ? '#ffb703' : '#00f2fe');
-      grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
+      const angle = p.angle || 0;
 
-      this.ctx.fillStyle = grad;
-      this.ctx.beginPath();
-      this.ctx.arc(cx, cy, pRadius, 0, Math.PI * 2);
-      this.ctx.fill();
+      this.ctx.save();
+      this.ctx.translate(cx, cy);
 
-      // Render inner ring structure for macrocycles / biopolymers
-      if (radNm >= 1.0) {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.lineWidth = 1;
+      if (shape === 'rod') {
+        // 🥖 Rod / Elongated Cylinder (Capsule Geometry)
+        const pLen = baseRadius * Math.sqrt(aspectRatio) * 1.6;
+        const pWidth = Math.max(2.5, (baseRadius / Math.sqrt(aspectRatio)) * 1.2);
+        
+        this.ctx.rotate(angle);
+
+        // Capsule fill & outline
+        const grad = this.ctx.createLinearGradient(-pLen / 2, 0, pLen / 2, 0);
+        grad.addColorStop(0, 'rgba(0, 242, 254, 0.5)');
+        grad.addColorStop(0.5, '#ffffff');
+        grad.addColorStop(1, 'rgba(0, 242, 254, 0.5)');
+
+        this.ctx.fillStyle = grad;
+        this.ctx.strokeStyle = '#00f2fe';
+        this.ctx.lineWidth = 1.2;
+
         this.ctx.beginPath();
-        this.ctx.arc(cx, cy, pRadius * 0.45, 0, Math.PI * 2);
+        if (typeof this.ctx.roundRect === 'function') {
+          this.ctx.roundRect(-pLen / 2, -pWidth / 2, pLen, pWidth, pWidth / 2);
+        } else {
+          this.ctx.rect(-pLen / 2, -pWidth / 2, pLen, pWidth);
+        }
+        this.ctx.fill();
         this.ctx.stroke();
+
+        // Inner backbone skeletal line
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        this.ctx.lineWidth = 1.4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-pLen * 0.35, 0);
+        this.ctx.lineTo(pLen * 0.35, 0);
+        this.ctx.stroke();
+
+      } else if (shape === 'disc') {
+        // 🪙 Disc / Planar Ring (3D Isometric Ellipse & Concentric Ring)
+        const rx = baseRadius * Math.sqrt(aspectRatio) * 1.4;
+        const ry = Math.max(2.5, (baseRadius / Math.sqrt(aspectRatio)) * 0.85);
+
+        this.ctx.rotate(angle);
+
+        const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, '#ffb703');
+        grad.addColorStop(1, 'rgba(255, 183, 3, 0.2)');
+
+        this.ctx.fillStyle = grad;
+        this.ctx.strokeStyle = '#ffb703';
+        this.ctx.lineWidth = 1.4;
+
+        this.ctx.beginPath();
+        this.ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Concentric inner ring / torus core
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        this.ctx.lineWidth = 1.2;
+        this.ctx.beginPath();
+        this.ctx.ellipse(0, 0, rx * 0.45, ry * 0.45, 0, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+      } else {
+        // 🟣 Sphere / Globular (Default)
+        const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, baseRadius);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, radNm >= 1.0 ? '#ffb703' : '#00f2fe');
+        grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
+
+        this.ctx.fillStyle = grad;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        if (radNm >= 1.0) {
+          this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+          this.ctx.lineWidth = 1;
+          this.ctx.beginPath();
+          this.ctx.arc(0, 0, baseRadius * 0.45, 0, Math.PI * 2);
+          this.ctx.stroke();
+        }
       }
+
+      this.ctx.restore();
     }
     this.ctx.restore();
   }

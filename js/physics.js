@@ -251,7 +251,6 @@ class PhysicsEngine {
     this.particles = [];
     // Spawn particles in areas with non-zero concentration
     for (let i = 0; i < 350; i++) {
-      // Pick random location in left chamber
       const px = Math.random() * (this.memStart - 4) + 2;
       const py = Math.random() * (this.ny - 4) + 2;
       this.particles.push({
@@ -259,6 +258,8 @@ class PhysicsEngine {
         y: py,
         vx: (Math.random() - 0.5) * 0.2,
         vy: (Math.random() - 0.5) * 0.2,
+        angle: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.2,
         radius: 3.5,
         color: '#00f2fe'
       });
@@ -421,7 +422,10 @@ class PhysicsEngine {
       if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
         p.x = Math.random() * (this.memStart - 4) + 2;
         p.y = Math.random() * (ny - 4) + 2;
+        p.angle = Math.random() * Math.PI * 2;
       }
+
+      p.angle = (p.angle || 0) + (p.rotSpeed || 0.1) * dt * 5.0 + (Math.random() - 0.5) * 0.08;
 
       const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
       const gy = Math.max(0, Math.min(ny - 1, Math.floor(p.y)));
