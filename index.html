@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Membrane Permeability & Diffusion Simulator</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="9" stroke="url(#paint0_linear)" stroke-width="2.2"/>
+            <path d="M7 12H17" stroke="url(#paint1_linear)" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M12 7V17" stroke="url(#paint1_linear)" stroke-width="2.2" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="paint0_linear" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#00F2FE"/>
+                <stop offset="1" stop-color="#4FACFE"/>
+              </linearGradient>
+              <linearGradient id="paint1_linear" x1="7" y1="7" x2="17" y2="17" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#00F5D4"/>
+                <stop offset="1" stop-color="#7B2CBF"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <h1>2D Membrane Permeability Simulator</h1>
+          <p class="subtitle">Interactive Diffusion & Lipid Bilayer Transport Dynamics</p>
+        </div>
+      </div>
+
+      <!-- Presets & Quick Actions -->
+      <div class="header-actions">
+        <div class="preset-selector">
+          <label for="preset-select">Preset Scenario:</label>
+          <select id="preset-select">
+            <option value="default">Passive Transcellular Diffusion</option>
+            <option value="lipophilic">Lipophilic Compound (High K)</option>
+            <option value="hydrophilic">Hydrophilic Barrier (Low K)</option>
+            <option value="ordered_gel">Rigid Gel Phase (High Order)</option>
+            <option value="fluid_disordered">Fluid Disordered Phase (High Fluidity)</option>
+            <option value="transmembrane_channel">Transmembrane Channel Pore</option>
+            <option value="pulse_wave">Concentration Wave Pulse</option>
+          </select>
+        </div>
+        <a href="https://github.com/KarelBerka/2D-permeability-simulator" target="_blank" class="btn btn-github" title="View Source Code on GitHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub Repository
+        </a>
+        <button id="btn-reset" class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <!-- Left Panel: Interactive Simulation Canvas & Plots -->
+      <section class="viewport-section">
+        <!-- Canvas Toolbar & Controls (Above 2D Canvas) -->
+        <div class="viewport-toolbar">
+          <div class="view-mode-toggle">
+            <button id="mode-macro" class="btn-toggle active" data-mode="macro">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M12 3v18"/></svg>
+              Macro Concentration Heatmap
+            </button>
+            <button id="mode-micro" class="btn-toggle" data-mode="micro">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M12 9V5"/><path d="M12 15v4"/></svg>
+              Micro Lipid Bilayer & Solutes
+            </button>
+          </div>
+
+          <div class="toolbar-center">
+            <!-- Paint tools -->
+            <div class="tool-group">
+              <span class="tool-label">Paint Tool:</span>
+              <button id="tool-source" class="btn-tool active" title="Add Solute Source" data-tool="source">
+                <span class="tool-dot source"></span> Source
+              </button>
+              <button id="tool-sink" class="btn-tool" title="Add Concentration Sink" data-tool="sink">
+                <span class="tool-dot sink"></span> Sink
+              </button>
+              <button id="tool-erase" class="btn-tool" title="Clear Region" data-tool="erase">
+                <span class="tool-dot erase"></span> Erase
+              </button>
+            </div>
+          </div>
+
+          <div class="toolbar-right">
+            <div class="colormap-select">
+              <label for="color-palette">Color Map:</label>
+              <select id="color-palette">
+                <option value="viridis">Viridis</option>
+                <option value="plasma">Plasma</option>
+                <option value="thermal" selected>Thermal Fire</option>
+                <option value="neon">Cyber Neon</option>
+                <option value="ocean">Oceanic Teal</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info & Status Bar (ABOVE 2D Canvas) -->
+        <div class="canvas-info-bar">
+          <div class="info-bar-left">
+            <div class="status-indicator">
+              <span id="sim-status-dot" class="status-dot running"></span>
+              <span id="sim-status-text">Simulating</span>
+            </div>
+            <div class="time-display">Simulation Time <i>t</i>: <span id="time-val">0.00</span></div>
+          </div>
+
+          <div class="info-bar-right">
+            <div class="legend-bar">
+              <span class="legend-min">0.0</span>
+              <div id="legend-gradient" class="legend-gradient"></div>
+              <span class="legend-max">1.0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Primary Enlarged 2D Simulation Canvas (800x240 px) -->
+        <div class="canvas-wrapper enlarged-view">
+          <canvas id="sim-canvas" width="800" height="240"></canvas>
+        </div>
+
+        <!-- Canvas Controls Bar (BELOW 2D Canvas) -->
+        <div class="canvas-controls-bar">
+          <div class="canvas-controls">
+            <button id="btn-play" class="btn btn-icon btn-primary" title="Play/Pause">
+              <svg id="icon-pause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+              <svg id="icon-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="hidden"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button id="btn-step" class="btn btn-icon btn-secondary" title="Single Step">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8V4z"/><path d="M19 5v14"/></svg>
+            </button>
+            
+            <div class="speed-slider-group">
+              <label for="sim-speed">Rate:</label>
+              <input type="range" id="sim-speed" min="1" max="100" value="1" step="1" />
+              <span id="speed-val">1s/s</span>
+              <div class="speed-quick-buttons">
+                <button class="btn-speed-preset active" data-rate="1">1s/s</button>
+                <button class="btn-speed-preset" data-rate="10">10s/s</button>
+                <button class="btn-speed-preset" data-rate="60">1m/s</button>
+                <button class="btn-speed-preset" data-rate="600">10m/s</button>
+                <button class="btn-speed-preset" data-rate="3600">1h/s ⚡</button>
+              </div>
+            </div>
+
+            <div class="toggle-option">
+              <input type="checkbox" id="chk-isolines" checked />
+              <label for="chk-isolines">Isolines</label>
+            </div>
+
+            <div class="toggle-option">
+              <input type="checkbox" id="chk-particles" checked />
+              <label for="chk-particles">Particles</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enlarged 1D Charts Dashboard -->
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>1D Concentration Profile <i>C(x)</i></h3>
+              <span class="chart-sub">Horizontal cross-sectional concentration profile</span>
+            </div>
+            <div class="chart-container">
+              <canvas id="profile-chart" width="400" height="180"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Permeation Flux <i>J(t)</i></h3>
+              <span class="chart-sub">Receiver chamber solute accumulation rate (retains full history)</span>
+            </div>
+            <div class="chart-container">
+              <canvas id="flux-chart" width="400" height="180"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Interactive Property Sliders ("Knobs & Controls") -->
+      <aside class="sidebar-section">
+        <!-- Calculated Permeability Metrics Dashboard (MOVED TO TOP ABOVE PARAMETERS) -->
+        <div class="metrics-card">
+          <div class="card-title justify-title">
+            <div class="title-left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              Calculated Permeability & Uncertainty
+            </div>
+            <button id="btn-toggle-logp" class="btn-mini-toggle" title="Toggle between P (linear) and log10(P)">
+              <span id="logp-toggle-label">log<sub>10</sub>P Mode</span>
+            </button>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <span class="metric-label">Membrane Diff. (<i>D<sub>mem</sub></i>)</span>
+              <span id="metric-dmem" class="metric-value">1.65e-3</span>
+              <span class="metric-unit">cm²/s</span>
+            </div>
+
+            <div class="metric-box highlighted">
+              <span id="metric-p-title" class="metric-label">Permeability (<i>P</i> &plusmn; &sigma;)</span>
+              <span id="metric-p" class="metric-value">4.40e-2</span>
+              <span id="metric-p-unit" class="metric-unit">cm/s</span>
+            </div>
+
+            <div class="metric-box">
+              <span class="metric-label">Lag Time (&tau;)</span>
+              <span id="metric-lag" class="metric-value">20.5 &plusmn; 1.2</span>
+              <span class="metric-unit">s</span>
+            </div>
+
+            <div class="metric-box">
+              <span class="metric-label">Receiver Flux (<i>J</i>)</span>
+              <span id="metric-flux" class="metric-value">0.00e+0</span>
+              <span class="metric-unit">mol/cm²s</span>
+            </div>
+          </div>
+
+          <!-- Formula callout -->
+          <div class="formula-box">
+            <span id="formula-text"><i>P = K &middot; D<sub>mem</sub> / d</i> &nbsp;|&nbsp; <i>&sigma;<sub>P</sub> from thermal & structural fluctuations</i></span>
+          </div>
+        </div>
+
+        <div class="sidebar-header">
+          <h2>Scalable Parameters</h2>
+          <p class="sidebar-desc">Expand cards below to adjust membrane & solute properties.</p>
+        </div>
+
+        <!-- EXPANDABLE MEMBRANE PARAMETERS CARD -->
+        <details open class="control-group-card expandable">
+          <summary class="card-title clickable">
+            <div class="title-left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+              Membrane Structural Properties
+            </div>
+            <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+
+          <div class="card-content">
+            <!-- Temperature Control (Body Temp 37°C / 310.15K) -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-temp">Temperature (<i>T</i>)</label>
+                <span id="val-temp" class="val-badge">37.0 &deg;C (310.15 K)</span>
+              </div>
+              <input type="range" id="slider-temp" min="4.0" max="50.0" step="0.5" value="37.0" />
+              <div class="slider-meta">
+                <span>4&deg;C</span>
+                <span>25&deg;C (Room)</span>
+                <span>37&deg;C (Body 🩸)</span>
+                <span>50&deg;C</span>
+              </div>
+              <p class="help-text">Water diffusion scales to 2.3&times;10&minus;5 cm&sup2;/s (2.3&times;10&minus;9 m&sup2;/s) at 25&deg;C and 3.0&times;10&minus;5 cm&sup2;/s (3.0&times;10&minus;9 m&sup2;/s) at 37&deg;C.</p>
+            </div>
+
+            <!-- Lipid Order -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-order">Lipid Order Parameter (<i>S</i>)</label>
+                <span id="val-order" class="val-badge">0.65</span>
+              </div>
+              <input type="range" id="slider-order" min="0.10" max="0.95" step="0.01" value="0.65" />
+              <div class="slider-meta">
+                <span>Disordered (<i>L<sub>&alpha;</sub></i>)</span>
+                <span>Ordered Gel (<i>L<sub>&beta;</sub></i>)</span>
+              </div>
+            </div>
+
+            <!-- Membrane Fluidity -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-fluidity">Membrane Fluidity (&eta;)</label>
+                <span id="val-fluidity" class="val-badge">0.50</span>
+              </div>
+              <input type="range" id="slider-fluidity" min="0.05" max="1.00" step="0.01" value="0.50" />
+              <div class="slider-meta">
+                <span>Viscous / Rigid</span>
+                <span>High Fluidity</span>
+              </div>
+            </div>
+
+            <!-- Membrane Thickness -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-thickness">Membrane Thickness (<i>d</i>)</label>
+                <span id="val-thickness" class="val-badge">4.5 nm</span>
+              </div>
+              <input type="range" id="slider-thickness" min="2.0" max="10.0" step="0.5" value="4.5" />
+              <div class="slider-meta">
+                <span>Thin (2 nm)</span>
+                <span>Thick (10 nm)</span>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- EXPANDABLE SOLUTE PARAMETERS CARD -->
+        <details open class="control-group-card expandable">
+          <summary class="card-title clickable">
+            <div class="title-left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 2v20"/></svg>
+              Solute Permeation Physics
+            </div>
+            <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+
+          <div class="card-content">
+            <!-- Solute Category & Size -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="select-solute-type">Solute Category & Size</label>
+                <span id="val-solute-mw" class="val-badge">300 Da</span>
+              </div>
+              <select id="select-solute-type" class="full-width-select">
+                <option value="water">Water Molecule (18 Da, 0.15 nm)</option>
+                <option value="ion">Monovalent Ion Na⁺/Cl⁻ (30 Da, 0.25 nm)</option>
+                <option value="small_organic">Small Organic / Sugar (100 Da, 0.4 nm)</option>
+                <option value="drug" selected>Small Drug Molecule (300 Da, 0.7 nm)</option>
+                <option value="macrocycle">Macrocycle / Cyclic Peptide (1000 Da, 1.2 nm)</option>
+                <option value="biopolymer">Biopolymer / Oligo (3000 Da, 2.0 nm)</option>
+              </select>
+            </div>
+
+            <!-- Solute Hydrodynamic Radius Slider (Stokes-Einstein Scaling) -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-radius">Hydrodynamic Radius (<i>r<sub>h</sub></i>)</label>
+                <span id="val-radius" class="val-badge">0.70 nm</span>
+              </div>
+              <input type="range" id="slider-radius" min="0.15" max="2.50" step="0.05" value="0.70" />
+              <div class="slider-meta">
+                <span>Tiny (0.15 nm)</span>
+                <span>Stokes-Einstein: <i>D = k<sub>B</sub>T / (6&pi;&eta;r<sub>h</sub>) &propto; 1/r<sub>h</sub></i></span>
+                <span>Large (2.5 nm)</span>
+              </div>
+            </div>
+
+            <!-- Partition Coefficient K -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-partition">Partition Coefficient (<i>K = C<sub>mem</sub>/C<sub>water</sub></i>)</label>
+                <span id="val-partition" class="val-badge">1.20</span>
+              </div>
+              <input type="range" id="slider-partition" min="0.05" max="5.00" step="0.05" value="1.20" />
+              <div class="slider-meta">
+                <span>Hydrophilic (<i>K</i> &lt; 1)</span>
+                <span>Lipophilic (<i>K</i> &gt; 1)</span>
+              </div>
+            </div>
+
+            <!-- Aqueous Diffusion Coefficient -->
+            <div class="control-item">
+              <div class="control-label-row">
+                <label for="slider-dwater">Base Water Diff Coeff (<i>D<sub>0</sub></i>)</label>
+                <span id="val-dwater" class="val-badge">1.00 cm²/s</span>
+              </div>
+              <input type="range" id="slider-dwater" min="0.2" max="2.5" step="0.05" value="1.00" />
+              <div class="slider-meta">
+                <span>Slow</span>
+                <span>Fast</span>
+              </div>
+            </div>
+
+            <!-- Transmembrane Pore / Channel -->
+            <div class="control-item checkbox-item">
+              <div class="checkbox-wrapper">
+                <input type="checkbox" id="chk-channel" />
+                <label for="chk-channel">Insert Aqueous Pore Channel</label>
+              </div>
+              <p class="help-text">Creates a high-permeability aqueous pore through hydrophobic lipid core.</p>
+            </div>
+          </div>
+        </details>
+      </aside>
+    </main>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/physics.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/controls.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
