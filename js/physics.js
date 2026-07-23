@@ -239,6 +239,9 @@ class PhysicsEngine {
       this.params.order = 0.20;
       this.params.fluidity = 0.85;
     } else if (preset === 'transmembrane_channel') {
+      this.params.hasChannel = true;
+    }
+
     this.updateMembraneGeometry();
     this.rebuildDiffusionMap();
     this.initParticles();
