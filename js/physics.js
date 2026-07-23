@@ -249,8 +249,8 @@ class PhysicsEngine {
 
   initParticles() {
     this.particles = [];
-    // Spawn particles in areas with non-zero concentration
-    for (let i = 0; i < 350; i++) {
+    // Spawn particles in areas with non-zero concentration (half density: 175)
+    for (let i = 0; i < 175; i++) {
       const px = Math.random() * (this.memStart - 4) + 2;
       const py = Math.random() * (this.ny - 4) + 2;
       this.particles.push({
@@ -491,8 +491,8 @@ class PhysicsEngine {
       totalMass += this.C[i];
     }
 
-    // Target particle count proportional to domain concentration mass
-    const targetCount = Math.max(40, Math.min(1000, Math.round(totalMass * 7.5)));
+    // Target particle count scaled to half (50% density reduction: 20 to 500 max)
+    const targetCount = Math.max(20, Math.min(500, Math.round(totalMass * 3.75)));
 
     if (this.particles.length < targetCount) {
       const needed = targetCount - this.particles.length;
