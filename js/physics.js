@@ -20,21 +20,21 @@ class PhysicsEngine {
     // Fixed Source / Sink mask (-1: regular, 0: fixed source, 1: fixed sink)
     this.mask = new Int8Array(nx * ny).fill(-1);
 
-    // Physics parameters (Calibrated to POPC bilayer experimental baseline at 37°C)
+    // Physics parameters (Calibrated to POPC bilayer & Ibuprofen MolMeDB MM00045 baseline at 37°C)
     this.params = {
       lipidPreset: 'popc',  // 'popc', 'popc_chol', 'dppc_gel', 'ecoli', 'sphingomyelin'
       tempC: 37.0,          // Default to 37°C Human Body Temperature (310.15 K)
       order: 0.60,          // POPC Lipid Order parameter S (0.60 at 37°C, L_alpha phase)
       fluidity: 0.55,       // POPC Membrane Fluidity eta (0.55 lateral mobility)
       thicknessNm: 3.9,     // POPC Hydrophobic Core Thickness (3.9 nm)
-      partitionK: 1.20,     // Partition coefficient K = C_mem / C_water
+      partitionK: 3.50,     // Ibuprofen MolMeDB MM00045 membrane partition K = 3.50
       dBase25C: 2.30,       // Base water self-diffusion D_0 at 25°C (2.30e-5 cm²/s = 2.30e-9 m²/s)
       dBase: 2.30,          // Backward compatibility alias
-      soluteType: 'drug',   // 'water', 'ion', 'small_organic', 'drug', 'macrocycle', 'biopolymer'
-      soluteShape: 'sphere',// 'sphere', 'rod', 'disc'
-      aspectRatio: 1.0,     // Aspect Ratio p = length/width (1.0 = isometric sphere)
-      mwDa: 300,            // Molecular Weight in Daltons
-      radiusNm: 0.70,       // Solute Hydrodynamic Radius r_h in nm
+      soluteType: 'ibuprofen', // 'water', 'ion', 'small_organic', 'ibuprofen', 'drug', 'macrocycle', 'biopolymer'
+      soluteShape: 'disc',  // Disc / Planar Ring shape (Perrin oblate factor for aromatic ring)
+      aspectRatio: 2.4,     // Aspect Ratio p = length/width (2.4 for planar ibuprofen)
+      mwDa: 206,            // Ibuprofen MW = 206.3 Da
+      radiusNm: 0.45,       // Solute Hydrodynamic Radius r_h = 0.45 nm
       hasChannel: false,    // Transmembrane pore channel
       speedMultiplier: 1.0
     };

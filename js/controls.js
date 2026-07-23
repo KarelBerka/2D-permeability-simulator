@@ -153,27 +153,31 @@ class ControlsManager {
       });
     }
 
-    // 2. Solute Category & Size Controls
+    // 2. Solute Category & Size Controls (Calibrated with MolMeDB Data)
     const solutePresets = {
-      water:        { mw: 18,   radius: 0.15, partitionK: 0.20, label: '18 Da' },
-      ion:          { mw: 30,   radius: 0.25, partitionK: 0.05, label: '30 Da' },
-      small_organic:{ mw: 100,  radius: 0.40, partitionK: 0.80, label: '100 Da' },
-      drug:         { mw: 300,  radius: 0.70, partitionK: 1.20, label: '300 Da' },
-      macrocycle:   { mw: 1000, radius: 1.20, partitionK: 2.20, label: '1000 Da' },
-      biopolymer:   { mw: 3000, radius: 2.00, partitionK: 0.10, label: '3000 Da' }
+      water:        { mw: 18,   radius: 0.15, partitionK: 0.20, shape: 'sphere', aspect: 1.0 },
+      ion:          { mw: 30,   radius: 0.25, partitionK: 0.05, shape: 'sphere', aspect: 1.0 },
+      small_organic:{ mw: 100,  radius: 0.40, partitionK: 0.80, shape: 'sphere', aspect: 1.0 },
+      ibuprofen:    { mw: 206,  radius: 0.45, partitionK: 3.50, shape: 'disc',   aspect: 2.4 }, // MolMeDB MM00045
+      drug:         { mw: 300,  radius: 0.70, partitionK: 1.20, shape: 'sphere', aspect: 1.0 },
+      macrocycle:   { mw: 1000, radius: 1.20, partitionK: 2.20, shape: 'disc',   aspect: 1.8 },
+      biopolymer:   { mw: 3000, radius: 2.00, partitionK: 0.10, shape: 'rod',    aspect: 3.5 }
     };
 
     const selectSoluteType = document.getElementById('select-solute-type');
     if (selectSoluteType) {
       selectSoluteType.addEventListener('change', (e) => {
-        const cat = solutePresets[e.target.value] || solutePresets.drug;
+        const cat = solutePresets[e.target.value] || solutePresets.ibuprofen;
         this.physics.params.soluteType = e.target.value;
         this.physics.params.mwDa = cat.mw;
         this.physics.params.radiusNm = cat.radius;
         this.physics.params.partitionK = cat.partitionK;
+        if (cat.shape) this.physics.params.soluteShape = cat.shape;
+        if (cat.aspect) this.physics.params.aspectRatio = cat.aspect;
 
-        this.syncSlidersFromPhysics();
+        this.physics.params.manualRadiusOverride = false;
         this.physics.rebuildDiffusionMap();
+        this.syncSlidersFromPhysics();
         this.updateMetricsUI();
       });
     }
