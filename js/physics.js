@@ -410,15 +410,13 @@ class PhysicsEngine {
     const c1D = this.getProfile1D();
 
     // 2. Count existing particles per grid column x
-    const particlesPerColumn = new Array(nx).fill(0);
-    const particleIndicesPerColumn = Array.from({ length: nx }, () => []);
+    const particlesPerColumn = new Uint16Array(nx);
 
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
       if (!p) continue;
       const gx = Math.max(0, Math.min(nx - 1, Math.floor(p.x)));
       particlesPerColumn[gx]++;
-      particleIndicesPerColumn[gx].push(i);
     }
 
     // 3. Exact column-by-column target scaling: 5.5 particles per unit concentration
@@ -432,7 +430,7 @@ class PhysicsEngine {
         const needed = targetInCol - currentInCol;
         for (let k = 0; k < needed; k++) {
           let ry = Math.floor(Math.random() * ny);
-          for (let attempt = 0; attempt < 10; attempt++) {
+          for (let attempt = 0; attempt < 8; attempt++) {
             const testY = Math.floor(Math.random() * ny);
             if (Math.random() < Math.min(1.0, this.C[testY * nx + x] + 0.1)) {
               ry = testY;
@@ -449,17 +447,15 @@ class PhysicsEngine {
           });
         }
       } else if (currentInCol > targetInCol + 1) {
-        const toRemove = currentInCol - targetInCol;
-        const indices = particleIndicesPerColumn[x];
-        for (let k = 0; k < toRemove && indices.length > 0; k++) {
-          const removeIdx = indices.pop();
-          this.particles[removeIdx] = null;
+        let toRemove = currentInCol - targetInCol;
+        for (let i = this.particles.length - 1; i >= 0 && toRemove > 0; i--) {
+          const p = this.particles[i];
+          if (p && Math.floor(p.x) === x) {
+            this.particles.splice(i, 1);
+            toRemove--;
+          }
         }
       }
-    }
-
-    if (this.particles.some(p => p === null)) {
-      this.particles = this.particles.filter(p => p !== null);
     }
   }
 
@@ -486,7 +482,10 @@ class PhysicsEngine {
     if (this.timeHistory.length === 0 || this.time - this.timeHistory[this.timeHistory.length - 1] >= 0.25) {
       this.timeHistory.push(this.time);
       this.fluxHistory.push({ conc: avgRightConc, flux: instantFlux });
-      // Retain complete time series trajectory without truncating
+      if (this.timeHistory.length > 250) {
+        this.timeHistory.shift();
+        this.fluxHistory.shift();
+      }
     }
   }
 
