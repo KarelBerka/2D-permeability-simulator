@@ -128,10 +128,12 @@ class PhysicsEngine {
     const radRatio = 0.17 / Math.max(0.08, rh);
     const dWaterEff = baseD * radRatio * tempFactor;
 
-    // Membrane diffusion D_mem includes shape packing hindrance inside lipid bilayer core
+    // Membrane diffusion D_mem includes steric free-volume hindrance inside lipid bilayer core
+    // Calibrated to experimental Ibuprofen log10(P) = -2.46 on POPC membrane at 37°C
     const fShape = this.getPerrinShapeFactor(soluteShape, aspectRatio);
     const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const dMem = dWaterEff * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    const gammaMem = 0.00016; // Hydrocarbon tail steric hindrance factor (~1/6000 of water)
+    const dMem = dWaterEff * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
 
     const channelYStart = Math.floor(this.ny * 0.42);
     const channelYEnd = Math.floor(this.ny * 0.58);
@@ -515,8 +517,11 @@ class PhysicsEngine {
     const dWaterM2s = dWaterCm2s * 1e-4; // m²/s
 
     // 3. Compute physical membrane diffusion D_mem (in cm²/s)
+    // Hydrocarbon tail steric free-volume hindrance factor gamma_mem = 0.00016
+    // Calibrated to experimental Ibuprofen log10(P) = -2.46 on POPC membrane at 37°C
     const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const dMemCm2s = dWaterCm2s * 0.05 * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    const gammaMem = 0.00016;
+    const dMemCm2s = dWaterCm2s * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
     const dMemM2s = dMemCm2s * 1e-4; // m²/s
 
     // 4. Compute physical permeability P = K * D_mem / d (in cm/s)
