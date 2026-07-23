@@ -147,13 +147,13 @@ class PhysicsEngine {
         if (isChannel) {
           // Channel pore cutoff for large macrocycles/biopolymers
           const poreCutoff = radiusNm > 1.8 ? 0.15 : (radiusNm > 1.2 ? 0.5 : 0.85);
-          this.Dmap[idx] = dWaterEff * poreCutoff;
+          this.Dmap[idx] = dWaterEff * poreCutoff * 0.25;
         } else if (isMembrane) {
-          // Inside hydrophobic membrane slab: hat(D) = K * D_mem
-          this.Dmap[idx] = partitionK * dMem;
+          // Inside hydrophobic membrane slab: hat(D) = K * D_mem scaled to physical grid equilibration rate
+          this.Dmap[idx] = Math.max(0.002, partitionK * dMem * 35.0);
         } else {
           // Aqueous reservoir
-          this.Dmap[idx] = dWaterEff;
+          this.Dmap[idx] = Math.max(0.05, dWaterEff * 0.25);
         }
       }
     }
