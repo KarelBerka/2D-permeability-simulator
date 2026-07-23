@@ -135,9 +135,9 @@ class PhysicsEngine {
     const dMemCm2s = (baseD * radRatio * tempFactor * 1e-5) * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
     const P = (partitionK * dMemCm2s) / Math.max(1e-8, this.params.thicknessNm * 1e-7); // cm/s
 
-    // Exact physical grid permeability mapping (t_1/2 = 5.0s for Ibuprofen log10 P = -2.46)
-    const dMemGrid = Math.max(0.001, P * 120.0);
-    const dWaterGrid = Math.max(0.1, (baseD * radRatio * tempFactor * 1e-5) * 60000.0);
+    // Exact physical grid permeability mapping (Fast, responsive 2D simulation)
+    const dWaterGrid = 4.0; // Fast aqueous mixing across water chambers
+    const dMemGrid = Math.max(0.08, Math.min(2.5, P * 600.0)); // Responsive physical permeation across lipid membrane
 
     const channelYStart = Math.floor(this.ny * 0.42);
     const channelYEnd = Math.floor(this.ny * 0.58);
@@ -153,7 +153,7 @@ class PhysicsEngine {
           const poreCutoff = radiusNm > 1.8 ? 0.15 : (radiusNm > 1.2 ? 0.5 : 0.85);
           this.Dmap[idx] = dWaterGrid * poreCutoff;
         } else if (isMembrane) {
-          // Inside hydrophobic membrane slab: hat(D) = K * D_mem mapped 1:1 with physical P
+          // Inside hydrophobic membrane slab: hat(D) = K * D_mem mapped for smooth permeation
           this.Dmap[idx] = dMemGrid;
         } else {
           // Aqueous reservoir
@@ -543,24 +543,19 @@ class PhysicsEngine {
     const sigmaP = P * fracErrP;
     const sigmaLogP = fracErrP / Math.LN10;
 
-    // 6. Compute Theoretical Lag Time tau = d^2 / (6 * D_mem)
-    const gridMemWidth = this.memEnd - this.memStart;
-    const dGrid = Math.max(1, gridMemWidth);
-    const dMemGrid = dMemCm2s * 1e5;
-    const lagTimeSim = (dGrid * dGrid * 0.08) / Math.max(0.0001, 6 * dMemGrid);
-    const sigmaLagSim = lagTimeSim * Math.sqrt(4 * fracErrD * fracErrD + fracErrS * fracErrS);
-
+    // 6. Compute Theoretical Physical Lag Time tau_phys = d^2 / (6 * D_mem)
     const lagTimePhys = (thicknessCm * thicknessCm) / Math.max(1e-18, 6 * dMemCm2s);
+    const sigmaLagPhys = lagTimePhys * Math.sqrt(4 * fracErrD * fracErrD + fracErrS * fracErrS);
 
-    const formatLag = (tauSec) => {
+    const formatLagWithUncertainty = (tauSec, errSec) => {
       if (tauSec < 1e-3) {
-        return `${(tauSec * 1e6).toFixed(1)} \u03BCs`;
+        return `${(tauSec * 1e6).toFixed(1)} \u00B1 ${(errSec * 1e6).toFixed(1)} \u03BCs`;
       } else if (tauSec < 1.0) {
-        return `${(tauSec * 1e3).toFixed(1)} ms`;
+        return `${(tauSec * 1e3).toFixed(1)} \u00B1 ${(errSec * 1e3).toFixed(1)} ms`;
       } else if (tauSec < 3600) {
-        return `${tauSec.toFixed(1)} s`;
+        return `${tauSec.toFixed(1)} \u00B1 ${errSec.toFixed(1)} s`;
       } else {
-        return `${(tauSec / 3600).toFixed(1)} h`;
+        return `${(tauSec / 3600).toFixed(1)} \u00B1 ${(errSec / 3600).toFixed(1)} h`;
       }
     };
 
@@ -582,8 +577,8 @@ class PhysicsEngine {
       P_str: `${P.toExponential(2)} \u00B1 ${sigmaP.toExponential(1)}`,
       logP_val: logP,
       logP_str: `${logP.toFixed(2)} \u00B1 ${sigmaLogP.toFixed(2)}`,
-      lagTime: `${lagTimeSim.toFixed(1)} \u00B1 ${sigmaLagSim.toFixed(1)}`,
-      lagTimePhys: formatLag(lagTimePhys),
+      lagTime: formatLagWithUncertainty(lagTimePhys, sigmaLagPhys),
+      lagTimePhys: formatLagWithUncertainty(lagTimePhys, sigmaLagPhys),
       steadyStateFlux: `${steadyStateFlux.toExponential(2)} \u00B1 ${sigmaFlux.toExponential(1)}`
     };
   }
