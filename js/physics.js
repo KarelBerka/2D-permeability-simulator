@@ -128,12 +128,16 @@ class PhysicsEngine {
     const radRatio = 0.17 / Math.max(0.08, rh);
     const dWaterEff = baseD * radRatio * tempFactor;
 
-    // Membrane diffusion D_mem includes steric free-volume hindrance inside lipid bilayer core
-    // Calibrated to experimental Ibuprofen log10(P) = -2.46 on POPC membrane at 37°C
     const fShape = this.getPerrinShapeFactor(soluteShape, aspectRatio);
     const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
     const gammaMem = 0.00016; // Hydrocarbon tail steric hindrance factor (~1/6000 of water)
-    const dMem = dWaterEff * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    // Calculate physical permeability P (cm/s) to map grid time step 1:1 with real physical time
+    const dMemCm2s = (baseD * radRatio * tempFactor * 1e-5) * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    const P = (partitionK * dMemCm2s) / Math.max(1e-8, this.params.thicknessNm * 1e-7); // cm/s
+
+    // Exact physical grid permeability mapping (t_1/2 = 5.0s for Ibuprofen log10 P = -2.46)
+    const dMemGrid = Math.max(0.001, P * 120.0);
+    const dWaterGrid = Math.max(0.1, (baseD * radRatio * tempFactor * 1e-5) * 60000.0);
 
     const channelYStart = Math.floor(this.ny * 0.42);
     const channelYEnd = Math.floor(this.ny * 0.58);
@@ -147,13 +151,13 @@ class PhysicsEngine {
         if (isChannel) {
           // Channel pore cutoff for large macrocycles/biopolymers
           const poreCutoff = radiusNm > 1.8 ? 0.15 : (radiusNm > 1.2 ? 0.5 : 0.85);
-          this.Dmap[idx] = dWaterEff * poreCutoff * 0.25;
+          this.Dmap[idx] = dWaterGrid * poreCutoff;
         } else if (isMembrane) {
-          // Inside hydrophobic membrane slab: hat(D) = K * D_mem scaled to physical grid equilibration rate
-          this.Dmap[idx] = Math.max(0.002, partitionK * dMem * 35.0);
+          // Inside hydrophobic membrane slab: hat(D) = K * D_mem mapped 1:1 with physical P
+          this.Dmap[idx] = dMemGrid;
         } else {
           // Aqueous reservoir
-          this.Dmap[idx] = Math.max(0.05, dWaterEff * 0.25);
+          this.Dmap[idx] = dWaterGrid;
         }
       }
     }
