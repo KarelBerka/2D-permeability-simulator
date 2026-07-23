@@ -176,21 +176,30 @@ class ChartEngine {
 
     if (fluxHistory.length < 2) return;
 
-    // Theoretical Lag Time tau = d^2 / (6 * D_mem)
-    const metrics = this.physics.getCalculatedMetrics();
-    const lagTimeVal = parseFloat(metrics.lagTime);
+    // Calculate exact physical lag time in seconds for chart placement
+    const { thicknessNm, partitionK, dBase25C, dBase, soluteShape, aspectRatio, order, fluidity } = this.physics.params;
+    const baseD = dBase25C !== undefined ? dBase25C : (dBase || 2.30);
+    const tempFactor = this.physics.getTemperatureFactor();
+    const rh = this.physics.computeHydrodynamicRadius();
+    const fShape = this.physics.getPerrinShapeFactor(soluteShape, aspectRatio);
+    const radRatio = 0.17 / Math.max(0.08, rh);
+    const dWaterCm2s = baseD * radRatio * tempFactor * 1e-5;
+    const orderFactor = Math.max(0.02, 1.0 - 0.82 * (order !== undefined ? order : 0.60));
+    const dMemCm2s = dWaterCm2s * 0.00016 * (fluidity !== undefined ? fluidity : 0.55) * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    const thicknessCm = (thicknessNm || 3.9) * 1e-7;
+    const lagTimeSec = (thicknessCm * thicknessCm) / Math.max(1e-18, 6 * dMemCm2s);
 
-    // Map time from 0 to total time
-    const startTime = 0;
-    const endTime = Math.max(1.0, this.physics.time);
-    const timeSpan = endTime;
+    // Map active trajectory window (max 60 seconds of simulation history for clear display)
+    const latestTime = timeHistory[timeHistory.length - 1] || 1.0;
+    const timeSpan = Math.max(5.0, Math.min(60.0, latestTime));
+    const startTime = Math.max(0, latestTime - timeSpan);
 
     // Lag time vertical line
-    if (lagTimeVal >= 0 && lagTimeVal <= endTime) {
-      const lagX = padL + (lagTimeVal / timeSpan) * plotW;
+    if (lagTimeSec >= startTime && lagTimeSec <= latestTime) {
+      const lagX = padL + ((lagTimeSec - startTime) / timeSpan) * plotW;
 
       ctx.save();
-      ctx.strokeStyle = 'rgba(255, 183, 3, 0.6)';
+      ctx.strokeStyle = 'rgba(255, 183, 3, 0.7)';
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.moveTo(lagX, padT);
@@ -200,7 +209,7 @@ class ChartEngine {
       ctx.font = '500 9px JetBrains Mono, monospace';
       ctx.fillStyle = '#ffb703';
       ctx.textAlign = 'center';
-      const formattedLagStr = this.formatTimeScale(lagTimeVal, timeSpan);
+      const formattedLagStr = `${(lagTimeSec * 1e6).toFixed(1)} \u03BCs`;
       ctx.fillText(`\u03C4 = ${formattedLagStr}`, lagX, padT + 12);
       ctx.restore();
     }
@@ -211,16 +220,22 @@ class ChartEngine {
     ctx.beginPath();
 
     const n = fluxHistory.length;
+    let startedPlot = false;
     for (let i = 0; i < n; i++) {
       const tVal = timeHistory[i];
-      const px = padL + (tVal / timeSpan) * plotW;
+      if (tVal < startTime) continue;
+      const px = padL + ((tVal - startTime) / timeSpan) * plotW;
       const normVal = Math.min(1.0, fluxHistory[i].conc);
       const py = padT + plotH * (1.0 - normVal);
 
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+      if (!startedPlot) {
+        ctx.moveTo(px, py);
+        startedPlot = true;
+      } else {
+        ctx.lineTo(px, py);
+      }
     }
-    ctx.stroke();
+    if (startedPlot) ctx.stroke();
 
     // Area fill
     ctx.lineTo(padL + plotW, padT + plotH);
