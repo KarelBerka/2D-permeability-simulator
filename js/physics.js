@@ -13,8 +13,9 @@ class PhysicsEngine {
 
     // Simulation state arrays
     this.C = new Float32Array(nx * ny);       // Solute Concentration C(x,y)
-    this.Cnext = new Float32Array(nx * ny);   // Buffer for next timestep
+    this.Cnext = new Float32Array(nx * ny);   // Buffer for next timestep (Concentration)
     this.u = new Float32Array(nx * ny);       // Chemical potential u (continuous across interface)
+    this.unext = new Float32Array(nx * ny);   // Buffer for next timestep (Potential)
     this.Dmap = new Float32Array(nx * ny);    // Local effective diffusion coefficient D_hat
 
     // Fixed Source / Sink mask (-1: regular, 0: fixed source, 1: fixed sink)
@@ -274,8 +275,6 @@ class PhysicsEngine {
     const actualSimulatedTimeStep = numSubsteps * dtSub;
 
     for (let step = 0; step < numSubsteps; step++) {
-      this.updatePotentialFromConcentration();
-
       // 2D Finite Difference stencil for PDE: du/dt = div( D_hat * grad(u) )
       for (let y = 0; y < ny; y++) {
         const yAbove = (y > 0) ? y - 1 : y; // Neumann no-flux boundary top/bottom
@@ -286,10 +285,10 @@ class PhysicsEngine {
 
           // Check if fixed source or sink mask
           if (this.mask[idx] === 0) {
-            this.u[idx] = 1.0;
+            this.unext[idx] = 1.0;
             continue;
           } else if (this.mask[idx] === 1) {
-            this.u[idx] = 0.0;
+            this.unext[idx] = 0.0;
             continue;
           }
 
@@ -313,12 +312,12 @@ class PhysicsEngine {
           const du = dtSub * (fluxLeft + fluxRight + fluxAbove + fluxBelow);
           const val = uCenter + du;
           // NaN Sanitizer & Clamping
-          this.Cnext[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
+          this.unext[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
         }
       }
 
-      // Copy buffer back to C
-      this.C.set(this.Cnext);
+      // Copy buffer back to potential array u
+      this.u.set(this.unext);
     }
 
     // High Speedup analytical spatial relaxation leap
