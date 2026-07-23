@@ -350,11 +350,11 @@
           </summary>
 
           <div class="card-content">
-            <!-- Solute Category & Size -->
+            <!-- Solute Category & Size Selector (Calibrated with MolMeDB Data) -->
             <div class="control-item">
               <div class="control-label-row">
                 <label for="select-solute-type">Solute Category & Size</label>
-                <span id="val-solute-mw" class="val-badge">300 Da</span>
+                <span id="val-solute-mw" class="val-badge">206 Da</span>
                 <button class="info-btn" data-info="solute-type" title="Learn more">i</button>
               </div>
               <select id="select-solute-type" class="full-width-select">
@@ -372,13 +372,13 @@
             <div class="control-item">
               <div class="control-label-row">
                 <label for="select-solute-shape">Molecular Shape Geometry</label>
-                <span id="val-shape-factor" class="val-badge">Sphere (f = 1.00)</span>
+                <span id="val-shape-factor" class="val-badge">Disc (f = 1.18)</span>
                 <button class="info-btn" data-info="solute-shape" title="Learn more">i</button>
               </div>
               <select id="select-solute-shape" class="full-width-select">
-                <option value="sphere" selected>🟣 Sphere / Globular (Perrin f = 1.00)</option>
+                <option value="sphere">🟣 Sphere / Globular (Perrin f = 1.00)</option>
                 <option value="rod">🥖 Rod / Elongated Cylinder (Perrin f = 1.28)</option>
-                <option value="disc">🪙 Disc / Planar Ring (Perrin f = 1.18)</option>
+                <option value="disc" selected>🪙 Disc / Planar Ring (Perrin f = 1.18)</option>
               </select>
             </div>
 
@@ -386,10 +386,10 @@
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-aspect">Aspect Ratio (<i>p = a/b</i>)</label>
-                <span id="val-aspect" class="val-badge">1.0 (Sphere)</span>
+                <span id="val-aspect" class="val-badge">2.4 (Disc)</span>
                 <button class="info-btn" data-info="aspect-ratio" title="Learn more">i</button>
               </div>
-              <input type="range" id="slider-aspect" min="1.0" max="8.0" step="0.2" value="1.0" />
+              <input type="range" id="slider-aspect" min="1.0" max="8.0" step="0.2" value="2.4" />
               <div class="slider-meta">
                 <span>Isometric (p = 1)</span>
                 <span>Perrin Hydrodynamic Drag</span>
@@ -401,10 +401,10 @@
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-radius">Hydrodynamic Radius (<i>r<sub>h</sub></i>)</label>
-                <span id="val-radius" class="val-badge">0.70 nm</span>
+                <span id="val-radius" class="val-badge">0.45 nm</span>
                 <button class="info-btn" data-info="radius" title="Learn more">i</button>
               </div>
-              <input type="range" id="slider-radius" min="0.15" max="2.50" step="0.05" value="0.70" />
+              <input type="range" id="slider-radius" min="0.15" max="2.50" step="0.05" value="0.45" />
               <div class="slider-meta">
                 <span>Tiny (0.15 nm)</span>
                 <span>Stokes-Einstein: <i>D = k<sub>B</sub>T / (6&pi;&eta;r<sub>h</sub> f<sub>shape</sub>)</i></span>
@@ -431,10 +431,10 @@
             <div class="control-item">
               <div class="control-label-row">
                 <label for="slider-partition">Partition Coefficient (<i>K = C<sub>mem</sub>/C<sub>water</sub></i>)</label>
-                <span id="val-partition" class="val-badge">1.20</span>
+                <span id="val-partition" class="val-badge">3.05</span>
                 <button class="info-btn" data-info="partition" title="Learn more">i</button>
               </div>
-              <input type="range" id="slider-partition" min="0.05" max="5.00" step="0.05" value="1.20" />
+              <input type="range" id="slider-partition" min="0.01" max="5.00" step="0.05" value="3.05" />
               <div class="slider-meta">
                 <span>Hydrophilic (<i>K</i> &lt; 1)</span>
                 <span>Lipophilic (<i>K</i> &gt; 1)</span>

@@ -395,6 +395,10 @@ class ControlsManager {
         this.updateMetricsUI();
       });
     }
+
+    // Guarantee 100% slider & badge synchronization on initialization
+    this.syncSlidersFromPhysics();
+    this.updateMetricsUI();
   }
 
   bindSlider(sliderId, badgeId, onChange, formatFn = (val) => parseFloat(val).toFixed(2)) {
