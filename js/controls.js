@@ -222,19 +222,40 @@ class ControlsManager {
       });
     }
 
-    // View Mode Toggles (Macro / Micro)
+    // View Mode Toggles (Macro / Micro / Dual Solutes)
     const btnMacro = document.getElementById('mode-macro');
     const btnMicro = document.getElementById('mode-micro');
-    if (btnMacro && btnMicro) {
+    const btnDual = document.getElementById('mode-dual');
+
+    const updateViewModeButtons = (activeMode) => {
+      [btnMacro, btnMicro, btnDual].forEach(b => b && b.classList.remove('active'));
+      if (activeMode === 'macro' && btnMacro) btnMacro.classList.add('active');
+      else if (activeMode === 'micro' && btnMicro) btnMicro.classList.add('active');
+      else if (activeMode === 'dual' && btnDual) btnDual.classList.add('active');
+    };
+
+    if (btnMacro) {
       btnMacro.addEventListener('click', () => {
-        btnMacro.classList.add('active');
-        btnMicro.classList.remove('active');
+        updateViewModeButtons('macro');
         this.render.viewMode = 'macro';
+        this.physics.viewSolute = 'A';
+        setSoluteView('A');
       });
+    }
+
+    if (btnMicro) {
       btnMicro.addEventListener('click', () => {
-        btnMicro.classList.add('active');
-        btnMacro.classList.remove('active');
+        updateViewModeButtons('micro');
         this.render.viewMode = 'micro';
+      });
+    }
+
+    if (btnDual) {
+      btnDual.addEventListener('click', () => {
+        updateViewModeButtons('dual');
+        this.render.viewMode = 'macro';
+        this.physics.viewSolute = 'both';
+        setSoluteView('both');
       });
     }
 
