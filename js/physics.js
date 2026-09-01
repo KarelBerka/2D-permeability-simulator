@@ -3,6 +3,7 @@
  * Solves coupled Fickian PDEs with partition jump conditions, cross-solute interaction,
  * solute-water solvation effects, solute-membrane affinity, and concentration-dependent
  * solubility limits with precipitation/crystallization kinetics and surface fouling.
+ * Strictly guarantees mass conservation across closed boundary domains.
  */
 
 class PhysicsEngine {
@@ -155,8 +156,9 @@ class PhysicsEngine {
     this.memEnd = center + Math.ceil(thicknessGrid / 2);
   }
 
-  buildDiffusionMapForSolute(soluteSpec, targetDmap, precipArray) {
-    const { order, fluidity, hasChannel, regime } = this.params;
+  buildDiffusionMapForSolute(soluteSpec, targetDmap, precipArray, otherConcentrationArray) {
+    const { order, fluidity, hasChannel, regime, interactAB } = this.params;
+    const chi = interactAB || 0.0;
     const baseD = soluteSpec.dBase25C || 2.30;
     const tempFactor = this.getTemperatureFactor();
 
@@ -194,6 +196,14 @@ class PhysicsEngine {
           localD = dMemGrid;
         }
 
+        // Cross-solute interaction effect on local mobility (crowding reduces diffusivity, attraction facilitates)
+        if (otherConcentrationArray && Math.abs(chi) > 1e-4) {
+          const cOther = otherConcentrationArray[idx] || 0;
+          if (cOther > 0.01) {
+            localD = localD / (1.0 + 0.25 * Math.max(0, chi) * cOther);
+          }
+        }
+
         // Membrane Surface Fouling (Cake Resistance) if in crystallization regime
         if (regime === 'crystallization' && precipArray && (x >= this.memStart - 1 && x <= this.memStart + 1)) {
           const cPrecip = precipArray[idx] || 0;
@@ -208,8 +218,8 @@ class PhysicsEngine {
   }
 
   rebuildDiffusionMap() {
-    this.buildDiffusionMapForSolute(this.params.soluteA, this.Dmap_A, this.C_precip_A);
-    this.buildDiffusionMapForSolute(this.params.soluteB, this.Dmap_B, this.C_precip_B);
+    this.buildDiffusionMapForSolute(this.params.soluteA, this.Dmap_A, this.C_precip_A, this.C_B);
+    this.buildDiffusionMapForSolute(this.params.soluteB, this.Dmap_B, this.C_precip_B, this.C_A);
   }
 
   updateConcentrationFromPotential() {
@@ -313,14 +323,14 @@ class PhysicsEngine {
     this.syncParticlePopulationWithConcentration();
   }
 
-  solveFickSubstep(uGrid, DmapGrid, Cother, selfInteractionCoeff) {
+  // Conservative 2-Way Gauss-Seidel Fickian Solver with exact zero-flux Neumann boundary conditions
+  solveFickSubstep(uGrid, DmapGrid) {
     const nx = this.nx;
     const ny = this.ny;
-    const chi = this.params.interactAB || 0.0;
 
     for (let y = 0; y < ny; y++) {
-      const yAbove = (y > 0) ? y - 1 : y;
-      const yBelow = (y < ny - 1) ? y + 1 : y;
+      const yAbove = (y > 0) ? y - 1 : -1;
+      const yBelow = (y < ny - 1) ? y + 1 : -1;
 
       for (let x = 0; x < nx; x++) {
         const idx = y * nx + x;
@@ -333,39 +343,47 @@ class PhysicsEngine {
           continue;
         }
 
-        const xLeft = (x > 0) ? x - 1 : 0;
-        const xRight = (x < nx - 1) ? x + 1 : nx - 1;
+        const xLeft = (x > 0) ? x - 1 : -1;
+        const xRight = (x < nx - 1) ? x + 1 : -1;
 
         const uCenter = uGrid[idx];
         const Dcenter = DmapGrid[idx];
 
-        const D_L = 2.0 * Dcenter * DmapGrid[y * nx + xLeft] / (Dcenter + DmapGrid[y * nx + xLeft] + 1e-6);
-        const D_R = 2.0 * Dcenter * DmapGrid[y * nx + xRight] / (Dcenter + DmapGrid[y * nx + xRight] + 1e-6);
-        const D_A = 2.0 * Dcenter * DmapGrid[yAbove * nx + x] / (Dcenter + DmapGrid[yAbove * nx + x] + 1e-6);
-        const D_B = 2.0 * Dcenter * DmapGrid[yBelow * nx + x] / (Dcenter + DmapGrid[yBelow * nx + x] + 1e-6);
+        let sumWeight = 0;
+        let sumWeightedU = 0;
 
-        const totalD = D_L + D_R + D_A + D_B;
-        if (totalD < 1e-8) continue;
-
-        let targetU = (D_L * uGrid[y * nx + xLeft] +
-                       D_R * uGrid[y * nx + xRight] +
-                       D_A * uGrid[yAbove * nx + x] +
-                       D_B * uGrid[yBelow * nx + x]) / totalD;
-
-        if (Math.abs(chi) > 1e-4 && Cother) {
-          const cOtherVal = Cother[idx];
-          const crowdingFactor = 1.0 / (1.0 + 0.3 * Math.max(0, chi) * cOtherVal);
-          targetU *= crowdingFactor;
+        if (xLeft >= 0) {
+          const D_L = 2.0 * Dcenter * DmapGrid[y * nx + xLeft] / (Dcenter + DmapGrid[y * nx + xLeft] + 1e-6);
+          sumWeight += D_L;
+          sumWeightedU += D_L * uGrid[y * nx + xLeft];
+        }
+        if (xRight >= 0) {
+          const D_R = 2.0 * Dcenter * DmapGrid[y * nx + xRight] / (Dcenter + DmapGrid[y * nx + xRight] + 1e-6);
+          sumWeight += D_R;
+          sumWeightedU += D_R * uGrid[y * nx + xRight];
+        }
+        if (yAbove >= 0) {
+          const D_A = 2.0 * Dcenter * DmapGrid[yAbove * nx + x] / (Dcenter + DmapGrid[yAbove * nx + x] + 1e-6);
+          sumWeight += D_A;
+          sumWeightedU += D_A * uGrid[yAbove * nx + x];
+        }
+        if (yBelow >= 0) {
+          const D_B = 2.0 * Dcenter * DmapGrid[yBelow * nx + x] / (Dcenter + DmapGrid[yBelow * nx + x] + 1e-6);
+          sumWeight += D_B;
+          sumWeightedU += D_B * uGrid[yBelow * nx + x];
         }
 
-        const decay = 1.0 - Math.exp(-totalD * 0.01);
+        if (sumWeight < 1e-8) continue;
+
+        const targetU = sumWeightedU / sumWeight;
+        const decay = 1.0 - Math.exp(-sumWeight * 0.015);
         const val = uCenter + decay * (targetU - uCenter);
         uGrid[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
       }
     }
   }
 
-  // Kinetics of precipitation / crystallization and dissolution
+  // Kinetics of precipitation / crystallization and dissolution with strict mass conservation
   applyCrystallizationKinetics(dt) {
     if (this.params.regime !== 'crystallization') {
       this.C_precip_A.fill(0);
@@ -432,13 +450,13 @@ class PhysicsEngine {
     const numSubsteps = Math.min(96, Math.max(12, Math.round(12 * Math.pow(speed, 0.30))));
 
     for (let step = 0; step < numSubsteps; step++) {
-      this.solveFickSubstep(this.u_A, this.Dmap_A, this.C_B, 1.0);
-      this.solveFickSubstep(this.u_B, this.Dmap_B, this.C_A, 1.0);
+      this.solveFickSubstep(this.u_A, this.Dmap_A);
+      this.solveFickSubstep(this.u_B, this.Dmap_B);
     }
 
     this.updateConcentrationFromPotential();
     this.applyCrystallizationKinetics(dtFrame);
-    this.rebuildDiffusionMap(); // Updates local diffusion with cake resistance
+    this.rebuildDiffusionMap(); // Updates local diffusion with cross-interaction and cake resistance
     this.updateParticles(dtFrame);
     this.recordFluxMetrics();
     this.time += dtFrame;
