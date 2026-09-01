@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>2D Membrane Permeability & Diffusion Simulator (Dual-Solute)</title>
+  <title>2D Membrane Permeability & Diffusion Simulator (Dual-Solute & Crystallization)</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,14 +35,25 @@
         </div>
         <div>
           <h1>2D Membrane Permeability Simulator <span class="badge-branch">Dual-Solute</span></h1>
-          <p class="subtitle">Interactive Diffusion, Cross-Solute Interaction & Bilayer Transport Dynamics</p>
+          <p class="subtitle">Diffusion, Solubility Limits, Crystallization Kinetics & Bilayer Transport Dynamics</p>
         </div>
       </div>
 
       <!-- Presets & Quick Actions -->
       <div class="header-actions">
+        <!-- Physical Transport Regime Switch -->
+        <div class="regime-toggle-group">
+          <span class="regime-label">Regime:</span>
+          <button id="btn-regime-dilute" class="btn-regime" data-regime="infinite_dilution" title="Ideal linear Fickian transport (no solubility ceiling)">
+            💧 Infinite Dilution
+          </button>
+          <button id="btn-regime-cryst" class="btn-regime active" data-regime="crystallization" title="Thermodynamic solubility limits, precipitation & membrane fouling">
+            💎 Crystallization
+          </button>
+        </div>
+
         <div class="preset-selector">
-          <label for="preset-select">Preset Scenario:</label>
+          <label for="preset-select">Preset:</label>
           <select id="preset-select">
             <option value="default">Passive Transcellular Diffusion (Solute A + B)</option>
             <option value="lipophilic">Lipophilic Compound (High KA)</option>
@@ -54,7 +65,7 @@
         </div>
         <a href="https://github.com/KarelBerka/2D-permeability-simulator" target="_blank" class="btn btn-github" title="View Source Code on GitHub">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          GitHub Repository
+          GitHub
         </a>
         <button id="btn-reset" class="btn btn-secondary">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -86,9 +97,9 @@
 
           <!-- Solute Overlay Selection -->
           <div class="solute-view-toggle">
-            <span class="view-label">Display View:</span>
+            <span class="view-label">Display:</span>
             <button id="btn-view-both" class="btn-solute-view active" data-view="both">
-              <span class="dot-badge both"></span> Both (Dual Overlay)
+              <span class="dot-badge both"></span> Both Overlay
             </button>
             <button id="btn-view-soluteA" class="btn-solute-view" data-view="A">
               <span class="dot-badge soluteA"></span> Solute A (Blue)
@@ -181,7 +192,7 @@
             <div class="chart-header justify-title">
               <div>
                 <h3>1D Concentration Profile <i>C(x)</i></h3>
-                <span class="chart-sub">Blue: Solute A | Red: Solute B</span>
+                <span class="chart-sub">Solid: Free Monomer | Shaded: Precipitate Crystals</span>
               </div>
               <button id="btn-toggle-profile-scale" class="btn-mini-toggle" title="Toggle Y-axis scale between Auto-Fit and Log10">
                 <span id="profile-scale-label">Auto-Fit Y</span>
@@ -211,7 +222,7 @@
           <div class="card-title justify-title">
             <div class="title-left">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-              Comparative Permeability Metrics
+              Comparative Transport Metrics
             </div>
             <span class="badge-temp">T = <span id="val-metrics-temp">37.0</span>°C</span>
           </div>
@@ -237,7 +248,7 @@
                   <td id="m-dmem-B">8.50e-12 cm²/s</td>
                 </tr>
                 <tr class="row-highlight">
-                  <td>Permeability (<i>P</i>)</td>
+                  <td>Effective Perm. (<i>P<sub>eff</sub></i>)</td>
                   <td id="m-P-A" class="val-blue">4.40e-4 cm/s</td>
                   <td id="m-P-B" class="val-red">3.20e-6 cm/s</td>
                 </tr>
@@ -245,6 +256,16 @@
                   <td>Partition <i>log<sub>10</sub>P</i></td>
                   <td id="m-logP-A">0.48</td>
                   <td id="m-logP-B">-0.82</td>
+                </tr>
+                <tr>
+                  <td>Solubility Limit (<i>C<sub>sat</sub></i>)</td>
+                  <td id="m-sat-A">1.20 mM</td>
+                  <td id="m-sat-B">0.60 mM</td>
+                </tr>
+                <tr>
+                  <td>Precipitate Fraction</td>
+                  <td id="m-precip-A">0.0 %</td>
+                  <td id="m-precip-B">0.0 %</td>
                 </tr>
                 <tr>
                   <td>Lag Time (<i>&tau;</i>)</td>
@@ -256,7 +277,7 @@
           </div>
 
           <div class="formula-box">
-            <span><i>P = K &middot; D<sub>mem</sub> / d</i> &nbsp;|&nbsp; <i>Solute Cross-Interaction &chi;<sub>AB</sub> = <span id="val-metrics-chi">0.25</span></i></span>
+            <span><i>P = K &middot; D<sub>mem</sub> / (d &middot; [1 + r<sub>cake</sub> C<sub>precip</sub>])</i> &nbsp;|&nbsp; <i>&chi;<sub>AB</sub> = <span id="val-metrics-chi">0.25</span></i></span>
           </div>
         </div>
 
@@ -270,7 +291,7 @@
           <summary class="card-title clickable">
             <div class="title-left">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 2v20"/></svg>
-              Solutes & Interaction Physics
+              Solutes, Solubility &amp; Kinetics
             </div>
             <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
           </summary>
@@ -307,18 +328,42 @@
 
               <div class="control-item">
                 <div class="control-label-row">
-                  <label for="slider-soluteA-partition">Partition Coefficient (<i>K<sub>A</sub></i>)</label>
-                  <span id="val-soluteA-partition" class="val-badge">3.05</span>
+                  <label for="slider-soluteA-conc">Initial Donor Conc. (<i>C<sub>A0</sub></i>)</label>
+                  <span id="val-soluteA-conc" class="val-badge">1.5 mM</span>
                 </div>
-                <input type="range" id="slider-soluteA-partition" min="0.01" max="5.00" step="0.05" value="3.05" />
+                <input type="range" id="slider-soluteA-conc" min="0.1" max="5.0" step="0.1" value="1.5" />
               </div>
 
               <div class="control-item">
                 <div class="control-label-row">
-                  <label for="slider-soluteA-conc">Initial Concentration (<i>C<sub>A0</sub></i>)</label>
-                  <span id="val-soluteA-conc" class="val-badge">1.0 mM</span>
+                  <label for="slider-soluteA-sat">Solubility Limit (<i>C<sub>sat,A</sub></i>)</label>
+                  <span id="val-soluteA-sat" class="val-badge">1.20 mM</span>
                 </div>
-                <input type="range" id="slider-soluteA-conc" min="0.1" max="5.0" step="0.1" value="1.0" />
+                <input type="range" id="slider-soluteA-sat" min="0.10" max="4.00" step="0.05" value="1.20" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="slider-soluteA-crystrate">Crystallization Rate (<i>k<sub>cryst</sub></i>)</label>
+                  <span id="val-soluteA-crystrate" class="val-badge">0.15 s⁻¹</span>
+                </div>
+                <input type="range" id="slider-soluteA-crystrate" min="0.00" max="0.50" step="0.01" value="0.15" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="slider-soluteA-fouling">Membrane Fouling / Cake (<i>r<sub>cake</sub></i>)</label>
+                  <span id="val-soluteA-fouling" class="val-badge">0.60</span>
+                </div>
+                <input type="range" id="slider-soluteA-fouling" min="0.00" max="2.00" step="0.05" value="0.60" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="slider-soluteA-partition">Partition Coefficient (<i>K<sub>A</sub></i>)</label>
+                  <span id="val-soluteA-partition" class="val-badge">3.05</span>
+                </div>
+                <input type="range" id="slider-soluteA-partition" min="0.01" max="5.00" step="0.05" value="3.05" />
               </div>
 
               <div class="control-item">
@@ -364,18 +409,42 @@
 
               <div class="control-item">
                 <div class="control-label-row">
-                  <label for="slider-soluteB-partition">Partition Coefficient (<i>K<sub>B</sub></i>)</label>
-                  <span id="val-soluteB-partition" class="val-badge">0.15</span>
+                  <label for="slider-soluteB-conc">Initial Donor Conc. (<i>C<sub>B0</sub></i>)</label>
+                  <span id="val-soluteB-conc" class="val-badge">1.0 mM</span>
                 </div>
-                <input type="range" id="slider-soluteB-partition" min="0.01" max="5.00" step="0.05" value="0.15" />
+                <input type="range" id="slider-soluteB-conc" min="0.1" max="5.0" step="0.1" value="1.0" />
               </div>
 
               <div class="control-item">
                 <div class="control-label-row">
-                  <label for="slider-soluteB-conc">Initial Concentration (<i>C<sub>B0</sub></i>)</label>
-                  <span id="val-soluteB-conc" class="val-badge">0.8 mM</span>
+                  <label for="slider-soluteB-sat">Solubility Limit (<i>C<sub>sat,B</sub></i>)</label>
+                  <span id="val-soluteB-sat" class="val-badge">0.60 mM</span>
                 </div>
-                <input type="range" id="slider-soluteB-conc" min="0.1" max="5.0" step="0.1" value="0.8" />
+                <input type="range" id="slider-soluteB-sat" min="0.10" max="4.00" step="0.05" value="0.60" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="slider-soluteB-crystrate">Crystallization Rate (<i>k<sub>cryst</sub></i>)</label>
+                  <span id="val-soluteB-crystrate" class="val-badge">0.12 s⁻¹</span>
+                </div>
+                <input type="range" id="slider-soluteB-crystrate" min="0.00" max="0.50" step="0.01" value="0.12" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="slider-soluteB-fouling">Membrane Fouling / Cake (<i>r<sub>cake</sub></i>)</label>
+                  <span id="val-soluteB-fouling" class="val-badge">0.40</span>
+                </div>
+                <input type="range" id="slider-soluteB-fouling" min="0.00" max="2.00" step="0.05" value="0.40" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="slider-soluteB-partition">Partition Coefficient (<i>K<sub>B</sub></i>)</label>
+                  <span id="val-soluteB-partition" class="val-badge">0.15</span>
+                </div>
+                <input type="range" id="slider-soluteB-partition" min="0.01" max="5.00" step="0.05" value="0.15" />
               </div>
 
               <div class="control-item">

@@ -1,7 +1,7 @@
 /**
- * render.js - 2D Membrane Permeability Visualizer & Canvas Render Engine (Dual-Solute Support)
- * Implements high-performance Blue/Red composite heatmaps, marching isolines,
- * discrete Blue (Solute A) & Red (Solute B) particles, and lipid bilayer structure.
+ * render.js - 2D Membrane Permeability Visualizer & Canvas Render Engine (Dual-Solute & Crystallization)
+ * Implements Blue/Red composite heatmaps, marching isolines, discrete solute particles,
+ * lipid bilayer structure, and sparkling crystalline precipitates & membrane cake layers.
  */
 
 class RenderEngine {
@@ -100,9 +100,11 @@ class RenderEngine {
       this.renderMembraneOverlay();
       if (this.showIsolines) this.renderIsolines();
       if (this.showParticles) this.renderParticles();
+      this.renderCrystalsAndCaking();
     } else {
       this.renderMicroView();
       if (this.showParticles) this.renderParticles();
+      this.renderCrystalsAndCaking();
     }
 
     this.renderChannelOverlay();
@@ -117,7 +119,6 @@ class RenderEngine {
 
     const cmapA = this.colormaps.soluteA;
     const cmapB = this.colormaps.soluteB;
-    const cmapDefault = this.colormaps[this.colorPaletteName] || this.colormaps.thermal;
 
     for (let py = 0; py < this.height; py++) {
       const gy = py * scaleY;
@@ -203,6 +204,116 @@ class RenderEngine {
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
     this.ctx.textAlign = 'center';
     this.ctx.fillText('MEMBRANE SLAB', (x1 + x2) / 2, 24);
+
+    this.ctx.restore();
+  }
+
+  renderCrystalsAndCaking() {
+    if (this.physics.params.regime !== 'crystallization') return;
+
+    const { C_precip_A, C_precip_B, nx, ny, memStart, viewSolute, time } = this.physics;
+    const cellW = this.width / nx;
+    const cellH = this.height / ny;
+
+    this.ctx.save();
+
+    // 1. Draw geometric shimmering micro-crystals throughout bulk liquid where precipitate exists
+    for (let y = 1; y < ny - 1; y += 2) {
+      for (let x = 1; x < nx - 1; x += 2) {
+        const idx = y * nx + x;
+        const pA = C_precip_A[idx];
+        const pB = C_precip_B[idx];
+
+        const cx = (x + 0.5) * cellW;
+        const cy = (y + 0.5) * cellH;
+
+        if ((viewSolute === 'A' || viewSolute === 'both') && pA > 0.05) {
+          const sz = Math.min(6.5, 2.5 + pA * 3.5);
+          const shimmer = Math.sin(time * 5.0 + x * 0.7 + y * 0.9) * 0.25 + 0.75;
+
+          this.ctx.save();
+          this.ctx.translate(cx, cy);
+          this.ctx.rotate(x * 0.5 + y * 0.8 + time * 0.2);
+
+          this.ctx.fillStyle = `rgba(220, 245, 255, ${0.85 * shimmer})`;
+          this.ctx.strokeStyle = `rgba(0, 180, 255, ${0.9 * shimmer})`;
+          this.ctx.lineWidth = 1.2;
+
+          // Diamond / Rhombus crystal geometry
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, -sz);
+          this.ctx.lineTo(sz * 0.65, 0);
+          this.ctx.lineTo(0, sz);
+          this.ctx.lineTo(-sz * 0.65, 0);
+          this.ctx.closePath();
+          this.ctx.fill();
+          this.ctx.stroke();
+
+          this.ctx.restore();
+        }
+
+        if ((viewSolute === 'B' || viewSolute === 'both') && pB > 0.05) {
+          const sz = Math.min(6.0, 2.2 + pB * 3.2);
+          const shimmer = Math.cos(time * 6.0 + x * 1.1 + y * 0.6) * 0.25 + 0.75;
+
+          this.ctx.save();
+          this.ctx.translate(cx + 2, cy - 2);
+          this.ctx.rotate(-x * 0.4 + y * 0.7 - time * 0.3);
+
+          this.ctx.fillStyle = `rgba(255, 220, 220, ${0.85 * shimmer})`;
+          this.ctx.strokeStyle = `rgba(255, 60, 80, ${0.9 * shimmer})`;
+          this.ctx.lineWidth = 1.2;
+
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, -sz * 0.9);
+          this.ctx.lineTo(sz * 0.8, -sz * 0.2);
+          this.ctx.lineTo(sz * 0.5, sz * 0.8);
+          this.ctx.lineTo(-sz * 0.5, sz * 0.8);
+          this.ctx.lineTo(-sz * 0.8, -sz * 0.2);
+          this.ctx.closePath();
+          this.ctx.fill();
+          this.ctx.stroke();
+
+          this.ctx.restore();
+        }
+      }
+    }
+
+    // 2. Draw Membrane Cake Layer (Surface Fouling Crust) on donor-membrane wall
+    const memX1 = (memStart / nx) * this.width;
+    let surfaceCakeA = 0, surfaceCakeB = 0;
+    for (let y = 0; y < ny; y++) {
+      surfaceCakeA += C_precip_A[y * nx + memStart];
+      surfaceCakeB += C_precip_B[y * nx + memStart];
+    }
+    surfaceCakeA /= ny;
+    surfaceCakeB /= ny;
+
+    const totalCake = (surfaceCakeA + surfaceCakeB);
+    if (totalCake > 0.08) {
+      const crustThickness = Math.min(14, 3 + totalCake * 8);
+
+      const grad = this.ctx.createLinearGradient(memX1 - crustThickness, 0, memX1, 0);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      grad.addColorStop(0.5, 'rgba(200, 240, 255, 0.45)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0.85)');
+
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(memX1 - crustThickness, 0, crustThickness, this.height);
+
+      // Crystalline texture dots along crust
+      this.ctx.fillStyle = '#ffffff';
+      for (let y = 6; y < this.height; y += 12) {
+        const dotX = memX1 - Math.random() * crustThickness;
+        this.ctx.fillRect(dotX, y, 2.5, 2.5);
+      }
+
+      // Cake Layer Annotation
+      this.ctx.font = '600 10px JetBrains Mono, monospace';
+      this.ctx.fillStyle = '#fde047';
+      this.ctx.textAlign = 'right';
+      this.ctx.fillText('CAKE LAYER (FOULING)', memX1 - crustThickness - 6, this.height - 12);
+    }
 
     this.ctx.restore();
   }

@@ -1,7 +1,7 @@
 /**
- * charts.js - Enriched Canvas Real-Time Charting Module (Dual Solutes & Dynamic Auto-Scaling)
- * Renders 1D Concentration Profiles C_A(x) & C_B(x) and Permeation Flux Time-Series J_A(t) & J_B(t).
- * Features dynamic Y-axis auto-scaling and logarithmic mode for clear visibility of small concentrations.
+ * charts.js - Enriched Canvas Real-Time Charting Module (Dual Solutes, Dynamic Auto-Scaling & Crystallization)
+ * Renders 1D Concentration Profiles C_A(x) & C_B(x), Precipitates C_precip(x), Solubility Limits C_sat,
+ * and Permeation Flux Time-Series J_A(t) & J_B(t).
  */
 
 class ChartEngine {
@@ -43,8 +43,15 @@ class ChartEngine {
 
     const profileA = this.physics.getProfile1D('A');
     const profileB = this.physics.getProfile1D('B');
+    const precipA = this.physics.getPrecipProfile1D('A');
+    const precipB = this.physics.getPrecipProfile1D('B');
+
     const nx = this.physics.nx;
-    const { memStart, memEnd, viewSolute } = this.physics;
+    const { memStart, memEnd, viewSolute, params } = this.physics;
+    const isCryst = (params.regime === 'crystallization');
+
+    const satA = params.soluteA.solubilityLimit || 1.2;
+    const satB = params.soluteB.solubilityLimit || 0.6;
 
     const padL = 40;
     const padR = 16;
@@ -54,11 +61,17 @@ class ChartEngine {
     const plotW = w - padL - padR;
     const plotH = h - padT - padB;
 
-    // Calculate maximum concentration based on active view mode
+    // Calculate maximum concentration based on active view mode (including precipitate fraction)
     let maxValA = 0.01, maxValB = 0.01;
     for (let x = 0; x < nx; x++) {
-      if (profileA[x] > maxValA) maxValA = profileA[x];
-      if (profileB[x] > maxValB) maxValB = profileB[x];
+      const totA = profileA[x] + (isCryst ? precipA[x] : 0);
+      const totB = profileB[x] + (isCryst ? precipB[x] : 0);
+      if (totA > maxValA) maxValA = totA;
+      if (totB > maxValB) maxValB = totB;
+    }
+    if (isCryst) {
+      if (satA > maxValA) maxValA = satA;
+      if (satB > maxValB) maxValB = satB;
     }
 
     let maxY = 1.0;
@@ -126,8 +139,63 @@ class ChartEngine {
       ctx.fillText('\u25A0 Solute B', w - padR, padT - 8);
     }
 
-    // Helper to draw profile curve
-    const drawCurve = (profile, color, fillColor) => {
+    // Render dashed horizontal lines for Solubility Limits C_sat in crystallization regime
+    if (isCryst && this.profileScaleMode !== 'log') {
+      const drawSatLine = (satVal, color, label) => {
+        if (satVal <= maxY && satVal >= 0) {
+          const yPos = padT + plotH * (1.0 - (satVal / maxY));
+          ctx.save();
+          ctx.strokeStyle = color;
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(padL, yPos);
+          ctx.lineTo(w - padR, yPos);
+          ctx.stroke();
+
+          ctx.font = '500 9px JetBrains Mono, monospace';
+          ctx.fillStyle = color;
+          ctx.textAlign = 'left';
+          ctx.fillText(label, padL + 6, yPos - 3);
+          ctx.restore();
+        }
+      };
+
+      if (viewSolute === 'A' || viewSolute === 'both') {
+        drawSatLine(satA, 'rgba(0, 119, 255, 0.7)', `C_sat,A = ${satA.toFixed(2)} mM`);
+      }
+      if (viewSolute === 'B' || viewSolute === 'both') {
+        drawSatLine(satB, 'rgba(255, 51, 68, 0.7)', `C_sat,B = ${satB.toFixed(2)} mM`);
+      }
+    }
+
+    // Helper to draw profile curves (both free monomer and precipitate solid fraction)
+    const drawCurveAndPrecip = (freeProfile, precipProfile, color, fillColor, precipColor) => {
+      // 1. Draw solid crystal precipitate layer (if any)
+      if (isCryst && precipProfile) {
+        ctx.save();
+        ctx.fillStyle = precipColor;
+        ctx.beginPath();
+        for (let x = 0; x < nx; x++) {
+          const px = padL + (x / (nx - 1)) * plotW;
+          const totVal = freeProfile[x] + precipProfile[x];
+          const normVal = Math.min(1.0, totVal / maxY);
+          const py = padT + plotH * (1.0 - normVal);
+          if (x === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        for (let x = nx - 1; x >= 0; x--) {
+          const px = padL + (x / (nx - 1)) * plotW;
+          const normFree = Math.min(1.0, freeProfile[x] / maxY);
+          const py = padT + plotH * (1.0 - normFree);
+          ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 2. Draw free dissolved concentration line
       ctx.save();
       ctx.strokeStyle = color;
       ctx.lineWidth = 2.5;
@@ -135,7 +203,7 @@ class ChartEngine {
 
       for (let x = 0; x < nx; x++) {
         const px = padL + (x / (nx - 1)) * plotW;
-        const val = Math.max(0, profile[x]);
+        const val = Math.max(0, freeProfile[x]);
 
         let normVal = 0;
         if (this.profileScaleMode === 'log') {
@@ -160,10 +228,10 @@ class ChartEngine {
     };
 
     if (viewSolute === 'A' || viewSolute === 'both') {
-      drawCurve(profileA, '#0077ff', 'rgba(0, 119, 255, 0.12)');
+      drawCurveAndPrecip(profileA, precipA, '#0077ff', 'rgba(0, 119, 255, 0.12)', 'rgba(0, 200, 255, 0.28)');
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      drawCurve(profileB, '#ff3344', 'rgba(255, 51, 68, 0.12)');
+      drawCurveAndPrecip(profileB, precipB, '#ff3344', 'rgba(255, 51, 68, 0.12)', 'rgba(255, 120, 50, 0.28)');
     }
 
     // X-axis label
