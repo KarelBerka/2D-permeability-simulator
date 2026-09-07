@@ -200,11 +200,6 @@ class RenderEngine {
     this.ctx.stroke();
 
     this.ctx.setLineDash([]);
-    this.ctx.font = '600 12px Inter, sans-serif';
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('MEMBRANE SLAB', (x1 + x2) / 2, 24);
-
     this.ctx.restore();
   }
 
@@ -307,12 +302,6 @@ class RenderEngine {
         const dotX = memX1 - Math.random() * crustThickness;
         this.ctx.fillRect(dotX, y, 2.5, 2.5);
       }
-
-      // Cake Layer Annotation
-      this.ctx.font = '600 10px JetBrains Mono, monospace';
-      this.ctx.fillStyle = '#fde047';
-      this.ctx.textAlign = 'right';
-      this.ctx.fillText('CAKE LAYER (FOULING)', memX1 - crustThickness - 6, this.height - 12);
     }
 
     this.ctx.restore();
@@ -435,11 +424,6 @@ class RenderEngine {
       this.drawLipidTail(h2x, yPos, h2x - tailLength, yPos + wiggle2, order);
     }
 
-    this.ctx.font = '600 13px Inter, sans-serif';
-    this.ctx.fillStyle = 'rgba(0, 245, 212, 0.9)';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(`LIPID BILAYER STRUCTURE (S = ${order.toFixed(2)}, \u03B7 = ${fluidity.toFixed(2)})`, (x1 + x2) / 2, 24);
-
     this.ctx.restore();
   }
 
@@ -504,11 +488,6 @@ class RenderEngine {
 
     this.ctx.fillRect(x1 - 4, channelYEnd, x2 - x1 + 8, 8);
     this.ctx.strokeRect(x1 - 4, channelYEnd, x2 - x1 + 8, 8);
-
-    this.ctx.font = '600 11px Inter, sans-serif';
-    this.ctx.fillStyle = '#ffb703';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('AQUEOUS CHANNEL PORE', (x1 + x2) / 2, channelYStart + channelH / 2 + 4);
 
     this.ctx.restore();
   }

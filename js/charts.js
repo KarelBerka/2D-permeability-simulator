@@ -34,12 +34,55 @@ class ChartEngine {
     }
   }
 
+  getThemeColors() {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (isLight) {
+      return {
+        isLight: true,
+        textAxis: '#334155',
+        textLabel: '#0f172a',
+        textMuted: '#64748b',
+        gridLine: 'rgba(0, 0, 0, 0.09)',
+        memBg: 'rgba(14, 165, 233, 0.12)',
+        memBorder: 'rgba(14, 165, 233, 0.55)',
+        memText: '#0284c7',
+        soluteA: '#0284c7',
+        soluteAFill: 'rgba(2, 132, 199, 0.18)',
+        soluteAPrecip: 'rgba(56, 189, 248, 0.38)',
+        soluteB: '#e11d48',
+        soluteBFill: 'rgba(225, 29, 72, 0.18)',
+        soluteBPrecip: 'rgba(244, 63, 94, 0.38)',
+        accent: '#0d9488'
+      };
+    } else {
+      return {
+        isLight: false,
+        textAxis: '#e2e8f0',   // High contrast white-slate
+        textLabel: '#f8fafc',  // Pure crisp white
+        textMuted: '#cbd5e1',  // Legible light gray
+        gridLine: 'rgba(255, 255, 255, 0.13)',
+        memBg: 'rgba(0, 242, 254, 0.10)',
+        memBorder: 'rgba(0, 242, 254, 0.45)',
+        memText: '#00f5d4',
+        soluteA: '#38bdf8',
+        soluteAFill: 'rgba(56, 189, 248, 0.22)',
+        soluteAPrecip: 'rgba(0, 200, 255, 0.38)',
+        soluteB: '#fb7185',
+        soluteBFill: 'rgba(251, 113, 133, 0.22)',
+        soluteBPrecip: 'rgba(255, 100, 70, 0.38)',
+        accent: '#2dd4bf'
+      };
+    }
+  }
+
   drawProfileChart() {
     const ctx = this.profileCtx;
     const w = this.profileCanvas.width;
     const h = this.profileCanvas.height;
 
     ctx.clearRect(0, 0, w, h);
+
+    const tc = this.getThemeColors();
 
     const profileA = this.physics.getProfile1D('A');
     const profileB = this.physics.getProfile1D('B');
@@ -53,10 +96,10 @@ class ChartEngine {
     const satA = params.soluteA.solubilityLimit || 1.2;
     const satB = params.soluteB.solubilityLimit || 0.6;
 
-    const padL = 40;
+    const padL = 46;
     const padR = 16;
-    const padT = 24;
-    const padB = 26;
+    const padT = 26;
+    const padB = 28;
 
     const plotW = w - padL - padR;
     const plotH = h - padT - padB;
@@ -84,7 +127,7 @@ class ChartEngine {
     }
 
     // Background grid & Y-axis labels
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.strokeStyle = tc.gridLine;
     ctx.lineWidth = 1;
 
     for (let step = 0; step <= 4; step++) {
@@ -96,16 +139,16 @@ class ChartEngine {
       ctx.lineTo(w - padR, yPos);
       ctx.stroke();
 
-      ctx.font = '500 10px JetBrains Mono, monospace';
-      ctx.fillStyle = '#64748b';
+      ctx.font = '500 11px JetBrains Mono, monospace';
+      ctx.fillStyle = tc.textAxis;
       ctx.textAlign = 'right';
 
       if (this.profileScaleMode === 'log') {
         const logVal = -3.0 + frac * 3.6;
-        ctx.fillText(logVal.toFixed(1), padL - 6, yPos + 3);
+        ctx.fillText(logVal.toFixed(1), padL - 6, yPos + 4);
       } else {
         const v = frac * maxY;
-        ctx.fillText(v >= 10 ? v.toFixed(0) : v.toFixed(2), padL - 6, yPos + 3);
+        ctx.fillText(v >= 10 ? v.toFixed(0) : v.toFixed(2), padL - 6, yPos + 4);
       }
     }
 
@@ -113,30 +156,30 @@ class ChartEngine {
     const memX1 = padL + (memStart / nx) * plotW;
     const memX2 = padL + (memEnd / nx) * plotW;
 
-    ctx.fillStyle = 'rgba(0, 242, 254, 0.08)';
+    ctx.fillStyle = tc.memBg;
     ctx.fillRect(memX1, padT, memX2 - memX1, plotH);
-    ctx.strokeStyle = 'rgba(0, 242, 254, 0.35)';
+    ctx.strokeStyle = tc.memBorder;
     ctx.strokeRect(memX1, padT, memX2 - memX1, plotH);
 
-    // Region Labels
-    ctx.font = '600 10px Inter, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    // Region Labels above chart
+    ctx.font = '600 11px Inter, sans-serif';
+    ctx.fillStyle = tc.textMuted;
     ctx.textAlign = 'center';
-    ctx.fillText('DONOR', (padL + memX1) / 2, padT - 8);
-    ctx.fillStyle = 'rgba(0, 242, 254, 0.9)';
-    ctx.fillText('MEMBRANE', (memX1 + memX2) / 2, padT - 8);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.fillText('RECEIVER', (memX2 + w - padR) / 2, padT - 8);
+    ctx.fillText('DONOR', (padL + memX1) / 2, padT - 9);
+    ctx.fillStyle = tc.memText;
+    ctx.fillText('MEMBRÁNA', (memX1 + memX2) / 2, padT - 9);
+    ctx.fillStyle = tc.textMuted;
+    ctx.fillText('RECEIVER', (memX2 + w - padR) / 2, padT - 9);
 
     // Solute Legend
     ctx.textAlign = 'right';
     if (viewSolute === 'A' || viewSolute === 'both') {
-      ctx.fillStyle = '#0077ff';
-      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 70 : 0), padT - 8);
+      ctx.fillStyle = tc.soluteA;
+      ctx.fillText('\u25A0 Látka A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      ctx.fillStyle = '#ff3344';
-      ctx.fillText('\u25A0 Solute B', w - padR, padT - 8);
+      ctx.fillStyle = tc.soluteB;
+      ctx.fillText('\u25A0 Látka B', w - padR, padT - 9);
     }
 
     // Render dashed horizontal lines for Solubility Limits C_sat in crystallization regime
@@ -228,17 +271,17 @@ class ChartEngine {
     };
 
     if (viewSolute === 'A' || viewSolute === 'both') {
-      drawCurveAndPrecip(profileA, precipA, '#0077ff', 'rgba(0, 119, 255, 0.12)', 'rgba(0, 200, 255, 0.28)');
+      drawCurveAndPrecip(profileA, precipA, tc.soluteA, tc.soluteAFill, tc.soluteAPrecip);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      drawCurveAndPrecip(profileB, precipB, '#ff3344', 'rgba(255, 51, 68, 0.12)', 'rgba(255, 120, 50, 0.28)');
+      drawCurveAndPrecip(profileB, precipB, tc.soluteB, tc.soluteBFill, tc.soluteBPrecip);
     }
 
     // X-axis label
-    ctx.font = '500 10px Inter, sans-serif';
-    ctx.fillStyle = '#64748b';
+    ctx.font = '500 11px Inter, sans-serif';
+    ctx.fillStyle = tc.textAxis;
     ctx.textAlign = 'center';
-    ctx.fillText('Position across membrane axis (x)', padL + plotW / 2, h - 6);
+    ctx.fillText('Pozice podél osy membrány (x)', padL + plotW / 2, h - 8);
   }
 
   drawFluxChart() {
@@ -248,19 +291,20 @@ class ChartEngine {
 
     ctx.clearRect(0, 0, w, h);
 
+    const tc = this.getThemeColors();
     const { timeHistory, fluxHistory, viewSolute } = this.physics;
 
-    const padL = 40;
+    const padL = 46;
     const padR = 16;
-    const padT = 24;
-    const padB = 26;
+    const padT = 26;
+    const padB = 28;
 
     const plotW = w - padL - padR;
     const plotH = h - padT - padB;
 
     if (fluxHistory.length < 2) {
       // Empty grid
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+      ctx.strokeStyle = tc.gridLine;
       ctx.lineWidth = 1;
       for (let v = 0; v <= 1.0; v += 0.25) {
         const yPos = padT + plotH * (1.0 - v);
@@ -285,7 +329,7 @@ class ChartEngine {
     else maxFluxY = Math.max(0.01, Math.ceil(Math.max(maxConcA, maxConcB) * 1.25 * 100) / 100);
 
     // Grid lines & Y-axis labels
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.strokeStyle = tc.gridLine;
     ctx.lineWidth = 1;
 
     for (let step = 0; step <= 4; step++) {
@@ -298,26 +342,26 @@ class ChartEngine {
       ctx.lineTo(w - padR, yPos);
       ctx.stroke();
 
-      ctx.font = '500 10px JetBrains Mono, monospace';
-      ctx.fillStyle = '#64748b';
+      ctx.font = '500 11px JetBrains Mono, monospace';
+      ctx.fillStyle = tc.textAxis;
       ctx.textAlign = 'right';
-      ctx.fillText(v < 0.1 ? v.toFixed(3) : v.toFixed(2), padL - 6, yPos + 3);
+      ctx.fillText(v < 0.1 ? v.toFixed(3) : v.toFixed(2), padL - 6, yPos + 4);
     }
 
-    ctx.font = '600 10px Inter, sans-serif';
-    ctx.fillStyle = 'rgba(0, 245, 212, 0.9)';
+    ctx.font = '600 11px Inter, sans-serif';
+    ctx.fillStyle = tc.accent;
     ctx.textAlign = 'left';
-    ctx.fillText('Receiver Accumulation C_receiver(t)', padL, padT - 8);
+    ctx.fillText('Akumulace v receiveru C_receiver(t)', padL, padT - 9);
 
     // Legend Indicators
     ctx.textAlign = 'right';
     if (viewSolute === 'A' || viewSolute === 'both') {
-      ctx.fillStyle = '#0077ff';
-      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 70 : 0), padT - 8);
+      ctx.fillStyle = tc.soluteA;
+      ctx.fillText('\u25A0 Látka A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      ctx.fillStyle = '#ff3344';
-      ctx.fillText('\u25A0 Solute B', w - padR, padT - 8);
+      ctx.fillStyle = tc.soluteB;
+      ctx.fillText('\u25A0 Látka B', w - padR, padT - 9);
     }
 
     const latestTime = timeHistory[timeHistory.length - 1] || 1.0;
@@ -358,35 +402,35 @@ class ChartEngine {
     };
 
     if (viewSolute === 'A' || viewSolute === 'both') {
-      drawFluxSeries('concA', '#0077ff', 'rgba(0, 119, 255, 0.12)');
+      drawFluxSeries('concA', tc.soluteA, tc.soluteAFill);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      drawFluxSeries('concB', '#ff3344', 'rgba(255, 51, 68, 0.12)');
+      drawFluxSeries('concB', tc.soluteB, tc.soluteBFill);
     }
 
     // X-axis Time Ticks
     const numTicks = 5;
-    ctx.font = '500 9px JetBrains Mono, monospace';
-    ctx.fillStyle = '#94a3b8';
+    ctx.font = '500 10px JetBrains Mono, monospace';
+    ctx.fillStyle = tc.textAxis;
 
     for (let k = 0; k < numTicks; k++) {
       const frac = k / (numTicks - 1);
       const tickTime = frac * timeSpan;
       const tx = padL + frac * plotW;
 
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.strokeStyle = tc.gridLine;
       ctx.beginPath();
       ctx.moveTo(tx, padT);
       ctx.lineTo(tx, padT + plotH);
       ctx.stroke();
 
       ctx.textAlign = k === 0 ? 'left' : (k === numTicks - 1 ? 'right' : 'center');
-      ctx.fillText(this.formatTimeScale(tickTime, timeSpan), tx, padT + plotH + 13);
+      ctx.fillText(this.formatTimeScale(tickTime, timeSpan), tx, padT + plotH + 15);
     }
 
-    ctx.font = '600 10px Inter, sans-serif';
-    ctx.fillStyle = 'rgba(0, 242, 254, 0.9)';
+    ctx.font = '600 11px Inter, sans-serif';
+    ctx.fillStyle = tc.accent;
     ctx.textAlign = 'center';
-    ctx.fillText(`Total Time: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 2);
+    ctx.fillText(`Simulační čas: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 3);
   }
 }
