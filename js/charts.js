@@ -98,7 +98,7 @@ class ChartEngine {
 
     const padL = 46;
     const padR = 16;
-    const padT = 26;
+    const padT = 38;
     const padB = 28;
 
     const plotW = w - padL - padR;
@@ -161,25 +161,32 @@ class ChartEngine {
     ctx.strokeStyle = tc.memBorder;
     ctx.strokeRect(memX1, padT, memX2 - memX1, plotH);
 
-    // Region Labels above chart
+    // Row 1: Chamber Region Labels (above chart)
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = tc.textMuted;
     ctx.textAlign = 'center';
-    ctx.fillText('DONOR', (padL + memX1) / 2, padT - 9);
+    ctx.fillText('DONOR', (padL + memX1) / 2, 14);
     ctx.fillStyle = tc.memText;
-    ctx.fillText('MEMBRANE', (memX1 + memX2) / 2, padT - 9);
+    ctx.fillText('MEMBRANE', (memX1 + memX2) / 2, 14);
     ctx.fillStyle = tc.textMuted;
-    ctx.fillText('RECEIVER', (memX2 + w - padR) / 2, padT - 9);
+    ctx.fillText('RECEIVER', (memX2 + w - padR) / 2, 14);
+
+    // Row 2: Y-axis title / units on the left, Solute Legend on the right
+    ctx.font = '500 10px JetBrains Mono, monospace';
+    ctx.fillStyle = tc.textMuted;
+    ctx.textAlign = 'left';
+    ctx.fillText(this.profileScaleMode === 'log' ? 'Conc (log₁₀)' : 'C(x) [mM]', padL, 30);
 
     // Solute Legend
+    ctx.font = '600 11px Inter, sans-serif';
     ctx.textAlign = 'right';
     if (viewSolute === 'A' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteA;
-      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
+      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 76 : 0), 30);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteB;
-      ctx.fillText('\u25A0 Solute B', w - padR, padT - 9);
+      ctx.fillText('\u25A0 Solute B', w - padR, 30);
     }
 
     // Render dashed horizontal lines for Solubility Limits C_sat in crystallization regime
@@ -296,7 +303,7 @@ class ChartEngine {
 
     const padL = 46;
     const padR = 16;
-    const padT = 26;
+    const padT = 38;
     const padB = 28;
 
     const plotW = w - padL - padR;
@@ -348,20 +355,28 @@ class ChartEngine {
       ctx.fillText(v < 0.1 ? v.toFixed(3) : v.toFixed(2), padL - 6, yPos + 4);
     }
 
+    // Row 1: Header title
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = tc.accent;
     ctx.textAlign = 'left';
-    ctx.fillText('Receiver Accumulation C_receiver(t)', padL, padT - 9);
+    ctx.fillText('Receiver Chamber Accumulation', padL, 14);
+
+    // Row 2: Concentration Axis Unit (left) & Solute Legend (right)
+    ctx.font = '500 10px JetBrains Mono, monospace';
+    ctx.fillStyle = tc.textMuted;
+    ctx.textAlign = 'left';
+    ctx.fillText('C_receiver(t) [mM]', padL, 30);
 
     // Legend Indicators
+    ctx.font = '600 11px Inter, sans-serif';
     ctx.textAlign = 'right';
     if (viewSolute === 'A' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteA;
-      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
+      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 76 : 0), 30);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteB;
-      ctx.fillText('\u25A0 Solute B', w - padR, padT - 9);
+      ctx.fillText('\u25A0 Solute B', w - padR, 30);
     }
 
     const latestTime = timeHistory[timeHistory.length - 1] || 1.0;
