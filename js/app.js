@@ -34,11 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (theme === 'light') {
       if (themeIconSun) themeIconSun.classList.remove('hidden');
       if (themeIconMoon) themeIconMoon.classList.add('hidden');
-      if (themeLabel) themeLabel.textContent = 'Světlý';
+      if (themeLabel) themeLabel.textContent = 'Light';
     } else {
       if (themeIconSun) themeIconSun.classList.add('hidden');
       if (themeIconMoon) themeIconMoon.classList.remove('hidden');
-      if (themeLabel) themeLabel.textContent = 'Tmavý';
+      if (themeLabel) themeLabel.textContent = 'Dark';
     }
     charts.update();
   }
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (membranePhaseDesc) {
-      membranePhaseDesc.textContent = `Hydrofobní jádro (${params.lipidPreset.toUpperCase()}, S = ${params.order.toFixed(2)}, η = ${params.fluidity.toFixed(2)})`;
+      membranePhaseDesc.textContent = `Hydrophobic Core (${params.lipidPreset.toUpperCase()}, S = ${params.order.toFixed(2)}, η = ${params.fluidity.toFixed(2)})`;
     }
   }
 
@@ -106,12 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
       iconPause.classList.remove('hidden');
       iconPlay.classList.add('hidden');
       statusDot.className = 'status-dot running';
-      statusText.textContent = 'Simulace běží';
+      statusText.textContent = 'Simulating';
     } else {
       iconPause.classList.add('hidden');
       iconPlay.classList.remove('hidden');
       statusDot.className = 'status-dot paused';
-      statusText.textContent = 'Pozastaveno';
+      statusText.textContent = 'Paused';
     }
   }
 

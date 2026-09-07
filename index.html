@@ -63,10 +63,10 @@
             <option value="transmembrane_channel">Transmembrane Channel Pore</option>
           </select>
         </div>
-        <button id="btn-theme-toggle" class="btn btn-theme-toggle" title="Přepnout Světlý / Tmavý mód">
+        <button id="btn-theme-toggle" class="btn btn-theme-toggle" title="Toggle Light / Dark mode">
           <svg id="theme-icon-sun" class="hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <span id="theme-label">Tmavý</span>
+          <span id="theme-label">Dark</span>
         </button>
         <a href="https://github.com/KarelBerka/2D-permeability-simulator" target="_blank" class="btn btn-github" title="View Source Code on GitHub">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -153,21 +153,21 @@
         <!-- Chamber Region Header Indicator (Cleanly Outside Canvas) -->
         <div class="chamber-indicator-bar" id="chamber-indicator-bar">
           <div class="chamber-region donor-region">
-            <span class="region-title">💧 DONOROVÁ KOMORA</span>
-            <span class="region-desc">Vodný roztok (Zdroj)</span>
+            <span class="region-title">💧 DONOR CHAMBER</span>
+            <span class="region-desc">Aqueous Reservoir (Source)</span>
           </div>
           <div class="chamber-region membrane-region" id="chamber-membrane-region">
             <div class="region-title-row">
-              <span class="region-title">🛡️ LIPIDOVÁ MEMBRÁNA</span>
+              <span class="region-title">🛡️ LIPID BILAYER MEMBRANE</span>
               <span class="indicator-badge badge-thickness" id="badge-membrane-thickness">3.9 nm</span>
-              <span class="indicator-badge badge-cake hidden" id="badge-cake-status">⚠️ Nános krystalů (Cake)</span>
-              <span class="indicator-badge badge-pore hidden" id="badge-pore-status">⚡ Vodný pór aktivní</span>
+              <span class="indicator-badge badge-cake hidden" id="badge-cake-status">⚠️ Cake Layer (Fouling)</span>
+              <span class="indicator-badge badge-pore hidden" id="badge-pore-status">⚡ Aqueous Pore Active</span>
             </div>
-            <span class="region-desc" id="membrane-phase-desc">Hydrofobní bariéra (POPC fluidní fáze Lα)</span>
+            <span class="region-desc" id="membrane-phase-desc">Hydrophobic Barrier (POPC fluid Lα phase)</span>
           </div>
           <div class="chamber-region receiver-region">
-            <span class="region-title">💧 RECEIVER KOMORA</span>
-            <span class="region-desc">Vodný roztok (Akumulace J)</span>
+            <span class="region-title">💧 RECEIVER CHAMBER</span>
+            <span class="region-desc">Aqueous Sink (Accumulation J)</span>
           </div>
         </div>
 
@@ -591,23 +591,23 @@
         <div class="banner-title">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31M14 9.3V1.99M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
           <div>
-            <h2>Výukové moduly: Izolované klíčové parametry permeability</h2>
-            <p class="section-subtitle">Pochopte rozdělovací koeficient membrána–voda (<i>K</i>) a difuzní koeficient (<i>D</i>) izolovaně a prozkoumejte jejich syntézu v Overtonově rovnici <i>P = K &middot; D / d</i></p>
+            <h2>Educational Modules: Isolated Key Permeability Parameters</h2>
+            <p class="section-subtitle">Explore the membrane–water partition coefficient (<i>K</i>) and diffusion coefficient (<i>D</i>) in isolation and observe their synthesis in Overton's permeability equation <i>P = K &middot; D / d</i></p>
           </div>
         </div>
       </div>
 
       <div class="minisims-grid">
-        <!-- Minisim 1: Rozdělovací koeficient K -->
+        <!-- Minisim 1: Partition Coefficient K -->
         <div class="minisim-card">
           <div class="minisim-header">
             <div class="minisim-title">
               <span class="module-number">1</span>
-              <h3>Rozdělovací koeficient membrána–voda (<i>K</i> / <i>log P</i>)</h3>
+              <h3>Membrane–Water Partition Coefficient (<i>K</i> / <i>log P</i>)</h3>
             </div>
-            <span class="badge-theory">Termodynamická rovnováha</span>
+            <span class="badge-theory">Thermodynamic Equilibrium</span>
           </div>
-          <p class="minisim-desc">Určuje poměr koncentrací rozpuštěné látky v hydrofobním jádru membrány ku vodné fázi v rovnováze: <i>K = C<sub>lipid</sub> / C<sub>voda</sub></i>.</p>
+          <p class="minisim-desc">Determines the equilibrium concentration ratio of dissolved solute between the hydrophobic lipid membrane core and aqueous phase: <i>K = C<sub>lipid</sub> / C<sub>water</sub></i>.</p>
 
           <div class="minisim-canvas-wrap">
             <canvas id="minisim-partition-canvas" width="460" height="200"></canvas>
@@ -615,8 +615,8 @@
 
           <div class="minisim-split-indicator">
             <div class="split-labels">
-              <span>Ve vodě: <strong id="minisim-part-nwater">70</strong> částic</span>
-              <span>V membráně: <strong id="minisim-part-nlipid">70</strong> částic</span>
+              <span>In Water: <strong id="minisim-part-nwater">70</strong> particles</span>
+              <span>In Membrane: <strong id="minisim-part-nlipid">70</strong> particles</span>
             </div>
             <div class="split-bar-track">
               <div id="minisim-split-water" class="split-bar-water" style="width: 50%;"></div>
@@ -627,50 +627,50 @@
           <div class="minisim-controls">
             <div class="control-item">
               <div class="control-label-row">
-                <label for="minisim-k-preset">Předvolba látky</label>
+                <label for="minisim-k-preset">Solute Preset</label>
               </div>
               <select id="minisim-k-preset" class="full-width-select">
-                <option value="hydrophilic">Polární iont (K = 0.05, log P = -1.30)</option>
-                <option value="caffeine">Kofein / Glukóza (K = 0.15, log P = -0.82)</option>
-                <option value="neutral">Neutrální organická látka (K = 1.00, log P = 0.00)</option>
+                <option value="hydrophilic">Polar Ion (K = 0.05, log P = -1.30)</option>
+                <option value="caffeine">Caffeine / Glucose (K = 0.15, log P = -0.82)</option>
+                <option value="neutral">Neutral Organic (K = 1.00, log P = 0.00)</option>
                 <option value="ibuprofen" selected>Ibuprofen (K = 3.05, log P = 0.48)</option>
-                <option value="steroid">Lipofilní steroid (K = 7.50, log P = 0.88)</option>
-                <option value="custom">Vlastní hodnota...</option>
+                <option value="steroid">Lipophilic Steroid (K = 7.50, log P = 0.88)</option>
+                <option value="custom">Custom value...</option>
               </select>
             </div>
 
             <div class="control-item">
               <div class="control-label-row">
-                <label for="minisim-k-slider">Cílový rozdělovací koeficient (<i>K</i>)</label>
+                <label for="minisim-k-slider">Target Partition Coefficient (<i>K</i>)</label>
                 <span class="val-badge">K = <span id="minisim-k-val">3.05</span> | log P = <span id="minisim-logp-val">0.48</span></span>
               </div>
               <input type="range" id="minisim-k-slider" min="0.05" max="10.0" step="0.05" value="3.05" />
             </div>
 
             <div class="minisim-actions">
-              <div class="k-obs-box">Změřené <i>K<sub>obs</sub></i>: <strong id="minisim-k-obs">3.05</strong></div>
+              <div class="k-obs-box">Measured <i>K<sub>obs</sub></i>: <strong id="minisim-k-obs">3.05</strong></div>
               <div class="btn-group-row">
-                <button id="minisim-k-play" class="btn btn-sm btn-secondary">⏸ Pozastavit</button>
-                <button id="minisim-k-reset" class="btn btn-sm btn-secondary">🔄 Reset částic</button>
+                <button id="minisim-k-play" class="btn btn-sm btn-secondary">⏸ Pause</button>
+                <button id="minisim-k-reset" class="btn btn-sm btn-secondary">🔄 Reset Particles</button>
               </div>
             </div>
           </div>
 
           <div class="minisim-note">
-            💡 <strong>Propojení s permeabilitou:</strong> Látka s vysokým <i>K</i> snadno vstupuje do nitra hydrofobní membrány, kde dosahuje vysoké koncentrace. V rovnici permeability <i>P = K &middot; D / d</i> proto <i>K</i> vystupuje jako lineární multiplikátor.
+            💡 <strong>Connection to Permeability:</strong> A solute with high <i>K</i> readily partitions into the hydrophobic membrane interior, reaching a high local concentration. In Overton's permeability equation <i>P = K &middot; D / d</i>, <i>K</i> acts as a direct linear multiplier.
           </div>
         </div>
 
-        <!-- Minisim 2: Difuzní koeficient D -->
+        <!-- Minisim 2: Diffusion Coefficient D -->
         <div class="minisim-card">
           <div class="minisim-header">
             <div class="minisim-title">
               <span class="module-number">2</span>
-              <h3>Difuzní koeficient (<i>D</i>) &amp; Stokes-Einsteinův zákon</h3>
+              <h3>Diffusion Coefficient (<i>D</i>) &amp; Stokes-Einstein Law</h3>
             </div>
-            <span class="badge-theory">Kinetika náhodného pohybu</span>
+            <span class="badge-theory">Brownian Motion Kinetics</span>
           </div>
-          <p class="minisim-desc">Popisuje rychlost Brownova tepelného pohybu: <i>D = k<sub>B</sub> T / (6 &pi; &eta; r<sub>h</sub>)</i>. Vyšší viskozita membrány &eta; a větší poloměr <i>r<sub>h</sub></i> difuzi zpomalují.</p>
+          <p class="minisim-desc">Governs the rate of thermal Brownian motion: <i>D = k<sub>B</sub> T / (6 &pi; &eta; r<sub>h</sub>)</i>. Higher medium viscosity &eta; and larger hydrodynamic radius <i>r<sub>h</sub></i> retard diffusion.</p>
 
           <div class="minisim-canvas-wrap">
             <canvas id="minisim-diffusion-canvas" width="460" height="200"></canvas>
@@ -679,19 +679,19 @@
           <div class="minisim-controls">
             <div class="control-item">
               <div class="control-label-row">
-                <label for="minisim-diff-medium">Prostředí &amp; Viskozita (&eta;)</label>
+                <label for="minisim-diff-medium">Medium &amp; Viscosity (&eta;)</label>
               </div>
               <select id="minisim-diff-medium" class="full-width-select">
-                <option value="water" selected>💧 Voda (η ≈ 0.69 cP — nízká viskozita, rychlá difuze)</option>
-                <option value="olive_oil">🫒 Olej (η ≈ 40 cP — střední viskozita)</option>
-                <option value="lipid">🛡️ Hydrofobní jádro lipidů (η ≈ 90 cP — vysoká viskozita, silná bariéra)</option>
+                <option value="water" selected>💧 Bulk Water (η ≈ 0.69 cP — low viscosity, rapid diffusion)</option>
+                <option value="olive_oil">🫒 Oil (η ≈ 40 cP — intermediate viscosity)</option>
+                <option value="lipid">🛡️ Hydrophobic Lipid Core (η ≈ 90 cP — high viscosity barrier)</option>
               </select>
-              <span id="minisim-diff-eta-desc" class="mini-hint">Voda (η = 0.69 cP — nízká viskozita, rychlá difuze)</span>
+              <span id="minisim-diff-eta-desc" class="mini-hint">Bulk Water (η = 0.69 cP — low viscosity, rapid diffusion)</span>
             </div>
 
             <div class="control-item">
               <div class="control-label-row">
-                <label for="minisim-diff-radius">Hydrodynamický poloměr částice (<i>r<sub>h</sub></i>)</label>
+                <label for="minisim-diff-radius">Hydrodynamic Radius (<i>r<sub>h</sub></i>)</label>
                 <span id="minisim-diff-radius-val" class="val-badge">0.45 nm</span>
               </div>
               <input type="range" id="minisim-diff-radius" min="0.15" max="2.00" step="0.05" value="0.45" />
@@ -699,24 +699,24 @@
 
             <div class="control-item">
               <div class="control-label-row">
-                <label for="minisim-diff-temp">Teplota (<i>T</i>)</label>
+                <label for="minisim-diff-temp">Temperature (<i>T</i>)</label>
                 <span id="minisim-diff-temp-val" class="val-badge">37.0 °C</span>
               </div>
               <input type="range" id="minisim-diff-temp" min="10.0" max="50.0" step="1.0" value="37.0" />
             </div>
 
             <div class="minisim-actions">
-              <div class="k-obs-box">Vypočtený <i>D</i>: <strong id="minisim-d-val">9.87e-6 cm²/s</strong></div>
+              <div class="k-obs-box">Calculated <i>D</i>: <strong id="minisim-d-val">9.87e-6 cm²/s</strong></div>
               <div class="btn-group-row">
-                <button id="minisim-diff-drop" class="btn btn-sm btn-primary" title="Vypustit koncentrovaný puls z jednoho bodu">💧 Puls kapky</button>
-                <button id="minisim-diff-play" class="btn btn-sm btn-secondary">⏸ Pozastavit</button>
-                <button id="minisim-diff-reset" class="btn btn-sm btn-secondary">🔄 Spojitá difuze</button>
+                <button id="minisim-diff-drop" class="btn btn-sm btn-primary" title="Release concentrated solute pulse from center">💧 Drop Pulse</button>
+                <button id="minisim-diff-play" class="btn btn-sm btn-secondary">⏸ Pause</button>
+                <button id="minisim-diff-reset" class="btn btn-sm btn-secondary">🔄 Continuous Diffusion</button>
               </div>
             </div>
           </div>
 
           <div class="minisim-note">
-            💡 <strong>Propojení s permeabilitou:</strong> Difuzní koeficient určuje, jak rychle se molekuly uvnitř daného prostředí náhodně pohybují. V lipidovém jádru je difuze o 4 až 5 řádů pomalejší než ve vodě kvůli stěsnaným uhlovodíkovým řetězcům.
+            💡 <strong>Connection to Permeability:</strong> The diffusion coefficient determines how rapidly molecules perform random walks through a given medium. In the lipid acyl chain core, diffusion is several orders of magnitude slower than in bulk water due to dense steric hindrance.
           </div>
         </div>
       </div>
@@ -726,10 +726,10 @@
         <div class="synthesis-header">
           <div class="synthesis-title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m8 12 2 2 4-4"/></svg>
-            <h3>Syntéza: Overtonovo pravidlo permeability membrány</h3>
+            <h3>Synthesis: Overton's Rule of Membrane Permeability</h3>
           </div>
           <button id="btn-apply-minisims-to-main" class="btn btn-sm btn-primary">
-            🚀 Aplikovat hodnoty K a D do hlavní 2D simulace (Látka A)
+            🚀 Apply K &amp; D to Main 2D Simulation (Solute A)
           </button>
         </div>
 
@@ -749,7 +749,7 @@
           </div>
           <div class="synthesis-metrics">
             <div class="synth-metric-item">
-              <span class="metric-label">Teoretický lag time (&tau; = <i>d</i>² / 6<i>D</i>):</span>
+              <span class="metric-label">Theoretical Lag Time (&tau; = <i>d</i>² / 6<i>D</i>):</span>
               <strong id="synth-val-tau">17.1 s</strong>
             </div>
           </div>
@@ -765,54 +765,54 @@
         <summary class="references-summary">
           <div class="title-left">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10M6 14h6"/></svg>
-            <span>📚 Teoretické základy a doporučená vědecká literatura (References)</span>
+            <span>📚 Theoretical Foundations &amp; Scientific Literature (References)</span>
           </div>
           <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </summary>
 
         <div class="references-content">
           <p class="references-intro">
-            Simulátor vychází z klasických a moderních fyzikálně-chemických a biofyzikálních modelů transportu látek přes biologické membrány. Níže naleznete klíčové původní práce s přímými odkazy pro hlubší studium:
+            The simulator is built upon classical and modern physicochemical and biophysical models of transport across biological membranes. Key foundational publications with direct links for further study are listed below:
           </p>
 
           <ol class="citation-list">
             <li class="citation-item">
               <strong>Overton, C. E. (1899).</strong> <i>Ueber die allgemeinen osmotischen Eigenschaften der Zelle, ihre vermuthlichen Ursachen und ihre Bedeutung für die Physiologie.</i> Vierteljahrsschrift der Naturforschenden Gesellschaft in Zürich, 44, 88–135.
-              <p class="citation-annotation">Zakládající práce konceptu membránové permeability formulující tzv. Overtonovo pravidlo – rychlost pasivního průniku neelektrolytů buňkou přímo koreluje s jejich rozdělovacím koeficientem olej/voda (lipofilitou).</p>
+              <p class="citation-annotation">Foundational work establishing the solubility-diffusion hypothesis – passive permeation rate of nonelectrolytes directly correlates with their oil/water partition coefficient (lipophilicity).</p>
             </li>
 
             <li class="citation-item">
               <strong>Fick, A. (1855).</strong> <i>Ueber Diffusion.</i> Poggendorff's Annalen der Physik und Chemie, 94(1), 59–86.
               <a href="https://doi.org/10.1002/andp.18551700105" target="_blank" rel="noopener noreferrer" class="doi-link">DOI: 10.1002/andp.18551700105</a>
-              <p class="citation-annotation">Formulace 1. a 2. Fickova zákona difuze popisujícího difuzní tok molekul v koncentračním gradientu a časový vývoj koncentračního pole.</p>
+              <p class="citation-annotation">Formulation of Fick's 1st and 2nd laws of diffusion describing solute flux along concentration gradients and the time evolution of concentration fields.</p>
             </li>
 
             <li class="citation-item">
               <strong>Diamond, J. M., &amp; Katz, Y. (1974).</strong> <i>Interpretation of nonelectrolyte permeability of bilayer membranes.</i> The Journal of Membrane Biology, 17(1), 121–154.
               <a href="https://doi.org/10.1007/BF01870176" target="_blank" rel="noopener noreferrer" class="doi-link">DOI: 10.1007/BF01870176</a>
-              <p class="citation-annotation">Rigidní termodynamická analýza membránového transportu oddělující termodynamickou partiční složku <i>K</i> od intramembránové difuzní kinetiky <i>D</i> a vlivu solvatace.</p>
+              <p class="citation-annotation">Rigorous thermodynamic analysis of nonelectrolyte bilayer transport separating the equilibrium partition coefficient K from intra-membrane diffusion kinetics D and solvation effects.</p>
             </li>
 
             <li class="citation-item">
               <strong>Marrink, S. J., &amp; Berendsen, H. J. (1994).</strong> <i>Simulation of water transport through a lipid membrane.</i> The Journal of Physical Chemistry, 98(15), 4155–4168.
               <a href="https://doi.org/10.1021/j100066a040" target="_blank" rel="noopener noreferrer" class="doi-link">DOI: 10.1021/j100066a040</a>
-              <p class="citation-annotation">Průlomová molekulárně-dynamická simulace stanovující prostorové profily lokálního difuzního koeficientu <i>D(z)</i> a volné energie &Delta;G(z) napříč lipidovou dvojvrstvou na atomární úrovni.</p>
+              <p class="citation-annotation">Seminal molecular dynamics simulation characterizing local diffusion coefficient profiles D(z) and free energy barriers &Delta;G(z) across phospholipid bilayers at atomic resolution.</p>
             </li>
 
             <li class="citation-item">
               <strong>Crank, J. (1975).</strong> <i>The Mathematics of Diffusion.</i> 2nd Edition, Oxford University Press, Oxford. ISBN: 978-0198534112.
-              <p class="citation-annotation">Klasická matematická monografie obsahující přesná analytická řešení parciálních diferenciálních rovnic difuze přes bariéry a odvození lag time permeace &tau; = <i>d</i>² / (6<i>D</i>).</p>
+              <p class="citation-annotation">Classical mathematical monograph detailing analytical solutions to partial differential diffusion equations across barriers and derivation of the permeation lag time &tau; = <i>d</i>² / (6<i>D</i>).</p>
             </li>
 
             <li class="citation-item">
               <strong>Walter, A., &amp; Gutknecht, J. (1986).</strong> <i>Permeability of small nonelectrolytes through lipid bilayer membranes.</i> The Journal of Membrane Biology, 90(3), 207–217.
               <a href="https://doi.org/10.1007/BF01870126" target="_blank" rel="noopener noreferrer" class="doi-link">DOI: 10.1007/BF01870126</a>
-              <p class="citation-annotation">Kvantitativní experimentální srovnání permeability řady malých organických molekul a ověření platnosti solubility-diffusion mechanismu v planárních lipidových dvojvrstvách.</p>
+              <p class="citation-annotation">Quantitative experimental verification of permeability for diverse small nonelectrolytes across planar lipid bilayers, testing the boundaries of the solubility-diffusion model.</p>
             </li>
 
             <li class="citation-item">
-              <strong>Berka, K. et al.</strong> Výpočetní a simulační studie membránových permeabilit, volnoenergetických profilů a transportu léčiv přes fosfolipidové dvojvrstvy.
-              <a href="https://scholar.google.com/citations?user=KarelBerka" target="_blank" rel="noopener noreferrer" class="doi-link">Google Scholar profil</a>
+              <strong>Berka, K. et al.</strong> Computational and molecular simulation studies on membrane permeabilities, free-energy profiles, and drug transport across phospholipid bilayers.
+              <a href="https://scholar.google.com/citations?user=KarelBerka" target="_blank" rel="noopener noreferrer" class="doi-link">Google Scholar Profile</a>
             </li>
           </ol>
         </div>

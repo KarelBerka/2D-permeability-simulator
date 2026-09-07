@@ -152,29 +152,29 @@ $$D_{\text{mem}} = D_{\text{water}}(T) \cdot \gamma_{\text{mem}} \cdot (0.5 + \t
 
 ---
 
-## 📚 Doporučená literatura & Citace (References & Further Reading)
+## 📚 Scientific References & Further Reading
 
-Tento simulátor a jeho matematicko-fyzikální aparát vychází z teoretických a experimentálních základů biofyziky membrán:
+This simulator and its mathematical-physical model are grounded in the theoretical and experimental foundations of membrane biophysics:
 
 1. **Overton, C. E. (1899).** *Ueber die allgemeinen osmotischen Eigenschaften der Zelle, ihre vermuthlichen Ursachen und ihre Bedeutung für die Physiologie.* Vierteljahrsschrift der Naturforschenden Gesellschaft in Zürich, 44, 88–135.
-   > *Zakládající práce konceptu membránové permeability – formulace solubility-diffusion hypotézy (permeabilita koreluje s rozdělovacím koeficientem olej/voda).*
+   > *Foundational work on membrane permeability establishing the solubility-diffusion hypothesis (permeability correlates directly with oil/water partition coefficient).*
 
 2. **Fick, A. (1855).** *Ueber Diffusion.* Poggendorff's Annalen der Physik und Chemie, 94(1), 59–86. [DOI: 10.1002/andp.18551700105](https://doi.org/10.1002/andp.18551700105)
-   > *Formulace 1. a 2. Fickova zákona difuze popisujícího difuzní tok a časovou dynamiku koncentračního pole.*
+   > *Formulation of Fick's 1st and 2nd laws of diffusion describing diffusive flux and time-dependent concentration dynamics.*
 
 3. **Diamond, J. M., & Katz, Y. (1974).** *Interpretation of nonelectrolyte permeability of bilayer membranes.* The Journal of Membrane Biology, 17(1), 121–154. [DOI: 10.1007/BF01870176](https://doi.org/10.1007/BF01870176)
-   > *Detailní termodynamická analýza rozdělovacího koeficientu K a difuze D neelektrolytů v lipidových dvojvrstvách a separace solvatačních příspěvků.*
+   > *Detailed thermodynamic analysis of partition coefficient K and diffusion coefficient D of nonelectrolytes across lipid bilayers, dissecting solvation and size contributions.*
 
 4. **Marrink, S. J., & Berendsen, H. J. (1994).** *Simulation of water transport through a lipid membrane.* The Journal of Physical Chemistry, 98(15), 4155–4168. [DOI: 10.1021/j100066a040](https://doi.org/10.1021/j100066a040)
-   > *Průlomová molekulárně-dynamická simulace stanovující lokální profily difuzního koeficientu D(z) a volné energie $\Delta G(z)$ napříč fosfolipidovou membránou.*
+   > *Pioneering molecular dynamics simulation determining local diffusion coefficient profiles D(z) and free energy barriers $\Delta G(z)$ across phospholipid bilayers.*
 
 5. **Crank, J. (1975).** *The Mathematics of Diffusion.* 2nd Edition, Oxford University Press, Oxford. ISBN: 978-0198534112.
-   > *Klasická matematická monografie analytických řešení difuze přes membrány a odvození permeačního lag time $\tau = d^2 / (6D)$.*
+   > *Classic mathematical reference for analytical solutions of membrane diffusion and derivation of the permeation lag time $\tau = d^2 / (6D)$.*
 
 6. **Walter, A., & Gutknecht, J. (1986).** *Permeability of small nonelectrolytes through lipid bilayer membranes.* The Journal of Membrane Biology, 90(3), 207–217. [DOI: 10.1007/BF01870126](https://doi.org/10.1007/BF01870126)
-   > *Experimentální měření permeability modelových látek a ověření limitů Overtonova pravidla v planárních lipidových membránách.*
+   > *Experimental determination of small molecule permeability across planar lipid bilayer membranes and testing the limits of Overton's rule.*
 
-7. **Berka, K., et al.** *Výpočetní studie membránových permeabilit, volnoenergetických bariér a transportu léčiv přes fosfolipidové dvojvrstvy.* [Profil Google Scholar](https://scholar.google.com/citations?user=KarelBerka)
+7. **Berka, K., et al.** *Computational studies of membrane permeability, free energy barriers, and drug transport across phospholipid bilayers.* [Google Scholar Profile](https://scholar.google.com/citations?user=KarelBerka)
 
 ---
 

@@ -167,7 +167,7 @@ class ChartEngine {
     ctx.textAlign = 'center';
     ctx.fillText('DONOR', (padL + memX1) / 2, padT - 9);
     ctx.fillStyle = tc.memText;
-    ctx.fillText('MEMBRÁNA', (memX1 + memX2) / 2, padT - 9);
+    ctx.fillText('MEMBRANE', (memX1 + memX2) / 2, padT - 9);
     ctx.fillStyle = tc.textMuted;
     ctx.fillText('RECEIVER', (memX2 + w - padR) / 2, padT - 9);
 
@@ -175,11 +175,11 @@ class ChartEngine {
     ctx.textAlign = 'right';
     if (viewSolute === 'A' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteA;
-      ctx.fillText('\u25A0 Látka A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
+      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteB;
-      ctx.fillText('\u25A0 Látka B', w - padR, padT - 9);
+      ctx.fillText('\u25A0 Solute B', w - padR, padT - 9);
     }
 
     // Render dashed horizontal lines for Solubility Limits C_sat in crystallization regime
@@ -281,7 +281,7 @@ class ChartEngine {
     ctx.font = '500 11px Inter, sans-serif';
     ctx.fillStyle = tc.textAxis;
     ctx.textAlign = 'center';
-    ctx.fillText('Pozice podél osy membrány (x)', padL + plotW / 2, h - 8);
+    ctx.fillText('Position along membrane axis (x)', padL + plotW / 2, h - 8);
   }
 
   drawFluxChart() {
@@ -351,17 +351,17 @@ class ChartEngine {
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = tc.accent;
     ctx.textAlign = 'left';
-    ctx.fillText('Akumulace v receiveru C_receiver(t)', padL, padT - 9);
+    ctx.fillText('Receiver Accumulation C_receiver(t)', padL, padT - 9);
 
     // Legend Indicators
     ctx.textAlign = 'right';
     if (viewSolute === 'A' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteA;
-      ctx.fillText('\u25A0 Látka A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
+      ctx.fillText('\u25A0 Solute A', w - padR - (viewSolute === 'both' ? 76 : 0), padT - 9);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
       ctx.fillStyle = tc.soluteB;
-      ctx.fillText('\u25A0 Látka B', w - padR, padT - 9);
+      ctx.fillText('\u25A0 Solute B', w - padR, padT - 9);
     }
 
     const latestTime = timeHistory[timeHistory.length - 1] || 1.0;
@@ -431,6 +431,6 @@ class ChartEngine {
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = tc.accent;
     ctx.textAlign = 'center';
-    ctx.fillText(`Simulační čas: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 3);
+    ctx.fillText(`Simulation Time: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 3);
   }
 }

@@ -102,7 +102,7 @@ class MiniSimulators {
     if (btnPlay) {
       btnPlay.addEventListener('click', () => {
         this.partRunning = !this.partRunning;
-        btnPlay.textContent = this.partRunning ? '⏸ Pozastavit' : '▶ Spustit';
+        btnPlay.textContent = this.partRunning ? '⏸ Pause' : '▶ Play';
       });
     }
   }
@@ -203,10 +203,10 @@ class MiniSimulators {
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = isLight ? '#0369a1' : '#38bdf8';
     ctx.textAlign = 'center';
-    ctx.fillText('💧 VODNÁ FÁZE (Water)', midX * 0.5, 18);
+    ctx.fillText('💧 AQUEOUS PHASE (Water)', midX * 0.5, 18);
 
     ctx.fillStyle = isLight ? '#b45309' : '#fbbf24';
-    ctx.fillText('🛡️ LIPIDOVÁ FÁZE (Membrane)', midX + (w - midX) * 0.5, 18);
+    ctx.fillText('🛡️ LIPID PHASE (Membrane)', midX + (w - midX) * 0.5, 18);
 
     // Draw Particles & Count per Phase
     let countWater = 0;
@@ -380,7 +380,7 @@ class MiniSimulators {
     if (btnPlay) {
       btnPlay.addEventListener('click', () => {
         this.diffRunning = !this.diffRunning;
-        btnPlay.textContent = this.diffRunning ? '⏸ Pozastavit' : '▶ Spustit';
+        btnPlay.textContent = this.diffRunning ? '⏸ Pause' : '▶ Play';
       });
     }
 
@@ -397,9 +397,9 @@ class MiniSimulators {
     }
 
     if (badgeEta) {
-      if (this.diffMedium === 'water') badgeEta.textContent = 'Voda (η = 0.69 cP — nízká viskozita, rychlá difuze)';
-      else if (this.diffMedium === 'olive_oil') badgeEta.textContent = 'Olej (η = 40 cP — střední viskozita)';
-      else badgeEta.textContent = 'Lipidové jádro (η = 90 cP — vysoká viskozita, pomalá difuze)';
+      if (this.diffMedium === 'water') badgeEta.textContent = 'Water (η = 0.69 cP — low viscosity, rapid diffusion)';
+      else if (this.diffMedium === 'olive_oil') badgeEta.textContent = 'Olive oil (η = 40 cP — intermediate viscosity)';
+      else badgeEta.textContent = 'Lipid core (η = 90 cP — high viscosity, hindered diffusion)';
     }
   }
 
