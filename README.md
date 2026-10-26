@@ -74,7 +74,7 @@ $$r_h = R_{\text{eq}} \cdot f_{\text{shape}} \cdot (1 + 0.18 \cdot \text{Hydrati
 - **Sphere / Isometric**:
   $$f_{\text{shape}} = 1.0$$
 - **Prolate Ellipsoid (Rod / Cylinder)** with aspect ratio $p = a/b$:
-  $$f_{\text{shape}} = \frac{\sqrt{p^2 - 1}}{p^{2/3} \ln\left(p + \sqrt{p^2 - 1}\right)}$$
+  $$f_{\text{shape}} = \frac{\sqrt{p^2 - 1}}{p^{1/3} \ln\left(p + \sqrt{p^2 - 1}\right)}$$
 - **Oblate Ellipsoid (Disc / Planar Ring)** with aspect ratio $p = a/b$:
   $$f_{\text{shape}} = \frac{\sqrt{p^2 - 1}}{p^{2/3} \arctan\left(\sqrt{p^2 - 1}\right)}$$
 
@@ -121,21 +121,36 @@ $$D_{\text{mem}} = D_{\text{water}}(T) \cdot \gamma_{\text{mem}} \cdot (0.5 + \t
 
 ```
 2D-permeability-simulator/
-├── index.html          # HTML5 layout, toolbar, regime toggle & side-by-side metrics
+├── index.html                      # HTML5 layout, toolbar, regime toggle & side-by-side metrics
 ├── css/
-│   └── styles.css      # Dark scientific UI styling, responsive grid & animations
+│   └── styles.css                  # Scientific UI styling (Light/Dark themes), responsive grid
 ├── js/
-│   ├── physics.js      # 2D coupled Fickian PDE solver, crystallization kinetics & particle engine
-│   ├── render.js       # Heatmap renderer, lipid bilayer animation & crystal graphics
-│   ├── charts.js       # Dynamic 1D C(x) profiles, C_sat lines & J(t) accumulation charts
-│   ├── controls.js     # User interaction bindings, presets, regime switch & slider handlers
-│   └── app.js          # Animation loop orchestrator & state manager
-└── README.md           # Application documentation & scientific formulation
+│   ├── physics.js                  # 2D coupled Fickian PDE solver, crystallization kinetics & particle engine
+│   ├── render.js                   # Heatmap renderer, lipid bilayer animation & crystal graphics
+│   ├── charts.js                   # Dynamic 1D C(x) profiles, C_sat lines & J(t) accumulation charts
+│   ├── minisims.js                 # Educational minisimulators for partition (K) and diffusion (D)
+│   ├── controls.js                 # User interaction bindings, presets, regime switch & slider handlers
+│   └── app.js                      # Animation loop orchestrator & state manager
+├── paper/                          # Publication package for Journal of Open Source Software (JOSS)
+│   ├── paper.md                    # JOSS submission manuscript
+│   └── paper.bib                   # BibTeX references
+├── education/                      # Educational & Pharmacy Curriculum Publication Package
+│   ├── JOURNAL_SELECTION_GUIDE.md  # Detailed comparison of JOSS, AJPE, CPTL, JCE, and BAMBEd
+│   ├── PHARMACY_EDUCATION_MANUSCRIPT.md # Full educational manuscript draft for pharmacy education
+│   ├── STUDENT_LAB_WORKSHEET.md    # Guided student inquiry worksheet (BCS case studies)
+│   └── INSTRUCTOR_TEACHING_GUIDE.md# Solution key, pedagogy guide & grading rubric
+├── tests/
+│   └── physics.test.js             # Automated headless regression test suite (14/14 tests)
+├── CITATION.cff                    # Citation metadata for academic tracking
+├── CONTRIBUTING.md                 # Contribution guidelines
+├── CODE_OF_CONDUCT.md             # Contributor Covenant code of conduct
+├── LICENSE                         # MIT License
+└── README.md                       # Application documentation & scientific formulation
 ```
 
 ---
 
-## 💻 Local Development
+## 💻 Local Development & Testing
 
 1. **Clone Repository**:
    ```bash
@@ -149,6 +164,11 @@ $$D_{\text{mem}} = D_{\text{water}}(T) \cdot \gamma_{\text{mem}} \cdot (0.5 + \t
    python -m http.server 8080
    ```
    Open `http://localhost:8080` in your web browser.
+
+3. **Run Automated Test Suite**:
+   ```bash
+   node tests/physics.test.js
+   ```
 
 ---
 

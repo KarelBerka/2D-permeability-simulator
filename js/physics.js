@@ -130,7 +130,7 @@ class PhysicsEngine {
     if (shape === 'sphere' || Math.abs(p - 1.0) < 0.02) return 1.0;
     if (shape === 'rod') {
       const num = Math.sqrt(p * p - 1.0);
-      const den = Math.pow(p, 2.0 / 3.0) * Math.log(p + num);
+      const den = Math.pow(p, 1.0 / 3.0) * Math.log(p + num);
       return num / Math.max(0.001, den);
     } else if (shape === 'disc') {
       const num = Math.sqrt(p * p - 1.0);
@@ -765,4 +765,8 @@ class PhysicsEngine {
     }
     this.updatePotentialFromConcentration();
   }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = PhysicsEngine;
 }

@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software in your research or teaching, please cite it as below."
+title: "2D-Permeability-Simulator: An Interactive Web-Based Simulator for Membrane Permeability, Dual-Solute Diffusion, and Crystallization Kinetics"
+version: 1.2.0
+date-released: 2026-09-07
+url: "https://karelberka.github.io/2D-permeability-simulator/"
+repository-code: "https://github.com/KarelBerka/2D-permeability-simulator"
+license: MIT
+authors:
+  - family-names: Berka
+    given-names: Karel
+    orcid: "https://orcid.org/0000-0001-7004-9842"
+    affiliation: "Department of Physical Chemistry, Faculty of Science, Palacký University Olomouc, Czech Republic"
+keywords:
+  - membrane permeability
+  - biophysics
+  - physical chemistry education
+  - pharmacokinetics
+  - biopharmaceutics
+  - Fickian diffusion
+  - chemical potential
+  - crystallization kinetics
+  - Overton rule
