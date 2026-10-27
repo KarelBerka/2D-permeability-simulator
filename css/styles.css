@@ -1934,4 +1934,46 @@ details[open] summary.card-title.clickable .chevron-icon {
   color: #000;
 }
 
+/* Chart Header Button Group & Shape / Paint Target Controls */
+.chart-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.paint-target-select {
+  padding: 4px 8px;
+  font-size: 0.76rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.shape-control-row {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.shape-select {
+  padding: 3px 8px;
+  font-size: 0.76rem;
+  border-radius: 4px;
+  background: rgba(0, 242, 254, 0.08);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+[data-theme="light"] .paint-target-select,
+[data-theme="light"] .shape-select {
+  background: #f1f5f9;
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #0f172a;
+}
+
+
 

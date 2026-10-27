@@ -82,17 +82,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Check Cake Layer (fouling crust)
     if (badgeCake) {
-      if (params.regime === 'crystallization' && C_precip_A && C_precip_B) {
-        let cakeConc = 0;
-        for (let y = 0; y < ny; y++) {
-          cakeConc += C_precip_A[y * nx + memStart] + C_precip_B[y * nx + memStart];
-        }
-        cakeConc /= ny;
-        if (cakeConc > 0.08) badgeCake.classList.remove('hidden');
+      if (params.regime === 'crystallization') {
+        const cakeConc = physics.getSurfaceCakeConcentration('both');
+        if (cakeConc > 0.04) badgeCake.classList.remove('hidden');
         else badgeCake.classList.add('hidden');
       } else {
         badgeCake.classList.add('hidden');
       }
+    }
+
+    if (minisims && typeof minisims.updateSynthesisUI === 'function') {
+      minisims.updateSynthesisUI();
     }
 
     if (membranePhaseDesc) {

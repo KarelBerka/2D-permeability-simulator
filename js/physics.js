@@ -3,7 +3,7 @@
  * Solves coupled Fickian PDEs with partition jump conditions, cross-solute interaction,
  * solute-water solvation effects, solute-membrane affinity, and concentration-dependent
  * solubility limits with precipitation/crystallization kinetics and surface fouling.
- * Strictly guarantees mass conservation across closed boundary domains.
+ * Strictly guarantees mass conservation across closed boundary domains via finite-volume flux updates.
  */
 
 class PhysicsEngine {
@@ -29,8 +29,10 @@ class PhysicsEngine {
     this.unext_B = new Float32Array(nx * ny);
     this.Dmap_B = new Float32Array(nx * ny);
 
-    // Fixed Source / Sink mask (-1: regular, 0: fixed source, 1: fixed sink)
-    this.mask = new Int8Array(nx * ny).fill(-1);
+    // Separate Fixed Source / Sink masks (-1: regular, 0: fixed source, 1: fixed sink)
+    this.mask_A = new Int8Array(nx * ny).fill(-1);
+    this.mask_B = new Int8Array(nx * ny).fill(-1);
+    this.mask = this.mask_A; // Backward compatibility alias
 
     // Active visualization view filter: 'both' | 'A' | 'B'
     this.viewSolute = 'both';
@@ -60,6 +62,7 @@ class PhysicsEngine {
         aspectRatio: 2.4,
         mwDa: 206,
         radiusNm: 0.45,
+        manualRadiusOverride: false,
         hydration: 0.20,         // Solute-Water Interaction (low hydration)
         membraneAffinity: 0.85,  // Solute-Membrane Interaction (high hydrophobic affinity)
         solubilityLimit: 1.20,   // Saturation Concentration C_sat in mM
@@ -80,6 +83,7 @@ class PhysicsEngine {
         aspectRatio: 1.0,
         mwDa: 194,
         radiusNm: 0.38,
+        manualRadiusOverride: false,
         hydration: 0.65,         // Solute-Water Interaction (high solvation shell)
         membraneAffinity: 0.15,  // Solute-Membrane Interaction (low partition)
         solubilityLimit: 0.60,   // Saturation Concentration C_sat in mM
@@ -92,6 +96,7 @@ class PhysicsEngine {
 
     this.time = 0;
     this.dt = 0.12;
+    this._sweepFlip = false;
 
     // Membrane spatial boundaries (in grid units)
     this.memStart = 0;
@@ -101,9 +106,10 @@ class PhysicsEngine {
     this.particles = [];
     this.maxParticles = 2400;
 
-    // Historical tracking metrics
+    // Historical tracking metrics (decimated so t=0 is always preserved)
     this.timeHistory = [];
     this.fluxHistory = [];
+    this.historySampleInterval = 0.15;
 
     this.initGrid();
     this.resetScenario('default');
@@ -119,8 +125,8 @@ class PhysicsEngine {
     this.rebuildDiffusionMap();
   }
 
-  getTemperatureFactor() {
-    const tempC = this.params.tempC !== undefined ? this.params.tempC : 37.0;
+  getTemperatureFactor(tempOverrideC) {
+    const tempC = tempOverrideC !== undefined ? tempOverrideC : (this.params.tempC !== undefined ? this.params.tempC : 37.0);
     const T_kelvin = tempC + 273.15;
     return Math.exp(-2180 / T_kelvin + 2180 / 298.15);
   }
@@ -130,7 +136,7 @@ class PhysicsEngine {
     if (shape === 'sphere' || Math.abs(p - 1.0) < 0.02) return 1.0;
     if (shape === 'rod') {
       const num = Math.sqrt(p * p - 1.0);
-      const den = Math.pow(p, 1.0 / 3.0) * Math.log(p + num);
+      const den = Math.pow(p, 2.0 / 3.0) * Math.log(p + num);
       return num / Math.max(0.001, den);
     } else if (shape === 'disc') {
       const num = Math.sqrt(p * p - 1.0);
@@ -149,6 +155,29 @@ class PhysicsEngine {
     return Req * fShape * hydrationScale;
   }
 
+  // Unified physical diffusivity calculator used by both main engine and mini-simulators
+  computePhysicalDiffusivities(soluteSpec, tempOverrideC) {
+    const { order, fluidity } = this.params;
+    const baseD = soluteSpec.dBase25C || 2.30;
+    const tempFactor = this.getTemperatureFactor(tempOverrideC);
+
+    const rh = this.computeHydrodynamicRadius(soluteSpec);
+    soluteSpec.radiusNm = rh;
+
+    const radRatio = 0.17 / Math.max(0.08, rh);
+    const fShape = this.getPerrinShapeFactor(soluteSpec.soluteShape, soluteSpec.aspectRatio);
+    const hydrationPenalty = 1.0 / (1.0 + 0.25 * (soluteSpec.hydration || 0));
+
+    const dWaterCm2s = baseD * radRatio * tempFactor * hydrationPenalty * 1e-5;
+
+    const memAffinity = soluteSpec.membraneAffinity !== undefined ? soluteSpec.membraneAffinity : 0.5;
+    const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
+    const gammaMem = 0.00016 * (0.5 + memAffinity);
+
+    const dMemCm2s = dWaterCm2s * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+    return { rh, fShape, dWaterCm2s, dMemCm2s };
+  }
+
   updateMembraneGeometry() {
     const thicknessGrid = Math.round((this.params.thicknessNm / 10.0) * 44) + 8;
     const center = Math.floor(this.nx / 2);
@@ -157,31 +186,23 @@ class PhysicsEngine {
   }
 
   buildDiffusionMapForSolute(soluteSpec, targetDmap, precipArray, otherConcentrationArray) {
-    const { order, fluidity, hasChannel, regime, interactAB } = this.params;
+    const { hasChannel, regime, interactAB, thicknessNm } = this.params;
     const chi = interactAB || 0.0;
-    const baseD = soluteSpec.dBase25C || 2.30;
-    const tempFactor = this.getTemperatureFactor();
+    const { rh, dWaterCm2s, dMemCm2s } = this.computePhysicalDiffusivities(soluteSpec);
 
-    const rh = this.computeHydrodynamicRadius(soluteSpec);
-    soluteSpec.radiusNm = rh;
+    const thicknessGrid = Math.max(1, this.memEnd - this.memStart);
+    const P = (soluteSpec.partitionK * dMemCm2s) / Math.max(1e-8, thicknessNm * 1e-7);
 
-    const radRatio = 0.17 / Math.max(0.08, rh);
-    const fShape = this.getPerrinShapeFactor(soluteSpec.soluteShape, soluteSpec.aspectRatio);
-
-    const memAffinity = soluteSpec.membraneAffinity !== undefined ? soluteSpec.membraneAffinity : 0.5;
-    const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const gammaMem = 0.00016 * (0.5 + memAffinity);
-
-    const dMemCm2s = (baseD * radRatio * tempFactor * 1e-5) * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
-    const P = (soluteSpec.partitionK * dMemCm2s) / Math.max(1e-8, this.params.thicknessNm * 1e-7);
-
-    const dWaterGrid = 8.0 / (1.0 + 0.3 * (soluteSpec.hydration || 0));
-    const dMemGrid = Math.max(0.15, Math.min(6.0, P * 5000.0));
+    // Physical scaling to grid units:
+    // Aqueous mixing is rapid; membrane core diffusivity scales proportionally to physical D_mem and thickness
+    const dWaterGrid = Math.max(0.5, Math.min(20.0, (dWaterCm2s / 1e-5) * 8.0));
+    const dMemGrid = Math.max(0.002, Math.min(dWaterGrid * 0.8, P * 3200.0 * (thicknessGrid / 25.0) / Math.max(0.05, soluteSpec.partitionK)));
 
     const channelYStart = Math.floor(this.ny * 0.42);
     const channelYEnd = Math.floor(this.ny * 0.58);
-    const fouling = soluteSpec.foulingFactor || 0.5;
+    const fouling = soluteSpec.foulingFactor !== undefined ? soluteSpec.foulingFactor : 0.5;
 
+    // Precompute average surface cake precipitate along donor interface (x = memStart - 1 and memStart)
     for (let y = 0; y < this.ny; y++) {
       for (let x = 0; x < this.nx; x++) {
         const idx = y * this.nx + x;
@@ -196,19 +217,27 @@ class PhysicsEngine {
           localD = dMemGrid;
         }
 
-        // Cross-solute interaction effect on local mobility (crowding reduces diffusivity, attraction facilitates)
+        // Cross-solute interaction effect on local mobility:
+        // chi > 0: Steric crowding reduces diffusivity
+        // chi < 0: Co-transport / mutual attraction enhances diffusivity
         if (otherConcentrationArray && Math.abs(chi) > 1e-4) {
           const cOther = otherConcentrationArray[idx] || 0;
-          if (cOther > 0.01) {
-            localD = localD / (1.0 + 0.25 * Math.max(0, chi) * cOther);
+          if (cOther > 0.005) {
+            if (chi > 0) {
+              localD = localD / (1.0 + 0.45 * chi * cOther);
+            } else {
+              localD = localD * (1.0 + 0.45 * Math.abs(chi) * Math.min(3.0, cOther));
+            }
           }
         }
 
         // Membrane Surface Fouling (Cake Resistance) if in crystallization regime
-        if (regime === 'crystallization' && precipArray && (x >= this.memStart - 1 && x <= this.memStart + 1)) {
-          const cPrecip = precipArray[idx] || 0;
-          if (cPrecip > 0.05) {
-            localD = localD / (1.0 + fouling * cPrecip * 1.5);
+        if (regime === 'crystallization' && precipArray && (x >= this.memStart - 2 && x <= this.memStart + 2)) {
+          const cPrecipA = this.C_precip_A[y * this.nx + Math.max(0, this.memStart - 1)] + this.C_precip_A[y * this.nx + this.memStart];
+          const cPrecipB = this.C_precip_B[y * this.nx + Math.max(0, this.memStart - 1)] + this.C_precip_B[y * this.nx + this.memStart];
+          const localCake = (precipArray === this.C_precip_A ? cPrecipA : cPrecipB) + 0.35 * (precipArray === this.C_precip_A ? cPrecipB : cPrecipA);
+          if (localCake > 0.01) {
+            localD = localD / (1.0 + fouling * localCake * 2.5);
           }
         }
 
@@ -222,25 +251,30 @@ class PhysicsEngine {
     this.buildDiffusionMapForSolute(this.params.soluteB, this.Dmap_B, this.C_precip_B, this.C_A);
   }
 
+  recalculateDiffusivity() {
+    this.rebuildDiffusionMap();
+  }
+
+  getCellK(x, y, K) {
+    const isMembrane = (x >= this.memStart && x < this.memEnd);
+    if (!isMembrane) return 1.0;
+    const channelYStart = Math.floor(this.ny * 0.42);
+    const channelYEnd = Math.floor(this.ny * 0.58);
+    const isChannel = this.params.hasChannel && (y >= channelYStart && y <= channelYEnd);
+    return isChannel ? 1.0 : Math.max(0.01, K);
+  }
+
   updateConcentrationFromPotential() {
     const KA = Math.max(0.01, this.params.soluteA.partitionK);
     const KB = Math.max(0.01, this.params.soluteB.partitionK);
-    const channelYStart = Math.floor(this.ny * 0.42);
-    const channelYEnd = Math.floor(this.ny * 0.58);
 
     for (let y = 0; y < this.ny; y++) {
       for (let x = 0; x < this.nx; x++) {
         const idx = y * this.nx + x;
-        const isMembrane = (x >= this.memStart && x < this.memEnd);
-        const isChannel = this.params.hasChannel && isMembrane && (y >= channelYStart && y <= channelYEnd);
-
-        if (isMembrane && !isChannel) {
-          this.C_A[idx] = KA * this.u_A[idx];
-          this.C_B[idx] = KB * this.u_B[idx];
-        } else {
-          this.C_A[idx] = this.u_A[idx];
-          this.C_B[idx] = this.u_B[idx];
-        }
+        const kCellA = this.getCellK(x, y, KA);
+        const kCellB = this.getCellK(x, y, KB);
+        this.C_A[idx] = kCellA * this.u_A[idx];
+        this.C_B[idx] = kCellB * this.u_B[idx];
       }
     }
   }
@@ -248,22 +282,14 @@ class PhysicsEngine {
   updatePotentialFromConcentration() {
     const KA = Math.max(0.01, this.params.soluteA.partitionK);
     const KB = Math.max(0.01, this.params.soluteB.partitionK);
-    const channelYStart = Math.floor(this.ny * 0.42);
-    const channelYEnd = Math.floor(this.ny * 0.58);
 
     for (let y = 0; y < this.ny; y++) {
       for (let x = 0; x < this.nx; x++) {
         const idx = y * this.nx + x;
-        const isMembrane = (x >= this.memStart && x < this.memEnd);
-        const isChannel = this.params.hasChannel && isMembrane && (y >= channelYStart && y <= channelYEnd);
-
-        if (isMembrane && !isChannel) {
-          this.u_A[idx] = this.C_A[idx] / KA;
-          this.u_B[idx] = this.C_B[idx] / KB;
-        } else {
-          this.u_A[idx] = this.C_A[idx];
-          this.u_B[idx] = this.C_B[idx];
-        }
+        const kCellA = this.getCellK(x, y, KA);
+        const kCellB = this.getCellK(x, y, KB);
+        this.u_A[idx] = this.C_A[idx] / kCellA;
+        this.u_B[idx] = this.C_B[idx] / kCellB;
       }
     }
   }
@@ -272,6 +298,7 @@ class PhysicsEngine {
     this.time = 0;
     this.timeHistory = [];
     this.fluxHistory = [];
+    this.historySampleInterval = 0.15;
 
     this.C_A.fill(0);
     this.C_precip_A.fill(0);
@@ -281,10 +308,8 @@ class PhysicsEngine {
     this.C_precip_B.fill(0);
     this.u_B.fill(0);
 
-    this.mask.fill(-1);
-
-    const c0A = this.params.soluteA.initialConc !== undefined ? this.params.soluteA.initialConc : 1.5;
-    const c0B = this.params.soluteB.initialConc !== undefined ? this.params.soluteB.initialConc : 1.0;
+    this.mask_A.fill(-1);
+    this.mask_B.fill(-1);
 
     if (preset === 'lipophilic') {
       this.params.soluteA.partitionK = 3.5;
@@ -293,14 +318,21 @@ class PhysicsEngine {
       this.params.soluteA.partitionK = 0.15;
       this.params.soluteB.partitionK = 0.10;
     } else if (preset === 'ordered_gel') {
+      this.params.lipidPreset = 'dppc_gel';
       this.params.order = 0.90;
       this.params.fluidity = 0.15;
     } else if (preset === 'fluid_disordered') {
+      this.params.lipidPreset = 'popc';
       this.params.order = 0.20;
       this.params.fluidity = 0.85;
     } else if (preset === 'transmembrane_channel') {
       this.params.hasChannel = true;
     }
+
+    const c0A = this.params.soluteA.initialConc !== undefined ? this.params.soluteA.initialConc : 1.5;
+    const c0B = this.params.soluteB.initialConc !== undefined ? this.params.soluteB.initialConc : 1.0;
+
+    this.updateMembraneGeometry();
 
     // Initialize donor compartment with Solute A and Solute B
     for (let y = 0; y < this.ny; y++) {
@@ -313,8 +345,8 @@ class PhysicsEngine {
       }
     }
 
-    this.updateMembraneGeometry();
     this.rebuildDiffusionMap();
+    this.recordFluxMetrics(true);
     this.initParticles();
   }
 
@@ -323,121 +355,259 @@ class PhysicsEngine {
     this.syncParticlePopulationWithConcentration();
   }
 
-  // Conservative 2-Way Gauss-Seidel Fickian Solver with exact zero-flux Neumann boundary conditions
-  solveFickSubstep(uGrid, DmapGrid) {
+  /**
+   * Strictly Mass-Conserving Finite-Volume Fickian Substep with Symmetric Alternating Sweeps.
+   * For each cell i, mass change is dC_i = dt_sub * sum_j D_face * (u_j - u_i),
+   * and chemical potential is updated as u_i = C_i / K_i.
+   * Because flux across face (i, j) is antisymmetric (J_ij = -J_ji), total mass sum(C_i) is conserved to machine precision.
+   */
+  solveFickSubstep(CGrid, uGrid, DmapGrid, K, maskGrid, otherUGrid, dtSub, reverseSweep = false) {
     const nx = this.nx;
     const ny = this.ny;
+    const chi = this.params.interactAB || 0.0;
+    const channelYStart = Math.floor(ny * 0.42);
+    const channelYEnd = Math.floor(ny * 0.58);
+    const hasChannel = this.params.hasChannel;
+    const memStart = this.memStart;
+    const memEnd = this.memEnd;
+    const kVal = Math.max(0.01, K);
+    const hasCross = (otherUGrid && Math.abs(chi) > 1e-4);
+    const srcU = (K === this.params.soluteB.partitionK)
+      ? (this.params.soluteB.initialConc || 1.5)
+      : (this.params.soluteA.initialConc || 1.5);
 
+    const yStart = reverseSweep ? ny - 1 : 0;
+    const yEnd = reverseSweep ? -1 : ny;
+    const yStep = reverseSweep ? -1 : 1;
+
+    const xStart = reverseSweep ? nx - 1 : 0;
+    const xEnd = reverseSweep ? -1 : nx;
+    const xStep = reverseSweep ? -1 : 1;
+
+    // 1. Horizontal faces (x <-> x + 1): strictly mass-conserving pairwise implicit exchange
+    for (let y = yStart; y !== yEnd; y += yStep) {
+      const inChannelY = hasChannel && (y >= channelYStart && y <= channelYEnd);
+      for (let x = reverseSweep ? nx - 2 : 0; reverseSweep ? (x >= 0) : (x < nx - 1); x += xStep) {
+        const idxL = y * nx + x;
+        const idxR = idxL + 1;
+
+        const DL = DmapGrid[idxL];
+        const DR = DmapGrid[idxR];
+        const Dface = (2.0 * DL * DR) / (DL + DR + 1e-8);
+        if (Dface < 1e-8) continue;
+
+        const kL = ((x >= memStart && x < memEnd) && !inChannelY) ? kVal : 1.0;
+        const kR = (((x + 1) >= memStart && (x + 1) < memEnd) && !inChannelY) ? kVal : 1.0;
+
+        const uL = uGrid[idxL];
+        const uR = uGrid[idxR];
+
+        let drivingForce = uR - uL;
+        if (hasCross && (uL > 1e-5 || uR > 1e-5)) {
+          const cAvg = 0.5 * (CGrid[idxL] + CGrid[idxR]);
+          const satFactor = cAvg / (cAvg + 0.25);
+          drivingForce += -0.08 * chi * satFactor * (otherUGrid[idxR] - otherUGrid[idxL]);
+        }
+
+        const denom = 1.0 + dtSub * Dface * (1.0 / kL + 1.0 / kR);
+        let dM = (dtSub * Dface * drivingForce) / denom;
+
+        // Clamp dM so neither cell goes negative
+        if (dM > 0) {
+          dM = Math.min(dM, 0.99 * CGrid[idxR]);
+        } else if (dM < 0) {
+          dM = Math.max(dM, -0.99 * CGrid[idxL]);
+        }
+
+        if (maskGrid[idxL] === -1) {
+          CGrid[idxL] += dM;
+          uGrid[idxL] = CGrid[idxL] / kL;
+        }
+        if (maskGrid[idxR] === -1) {
+          CGrid[idxR] -= dM;
+          uGrid[idxR] = CGrid[idxR] / kR;
+        }
+      }
+    }
+
+    // 2. Vertical faces (y <-> y + 1): strictly mass-conserving pairwise implicit exchange
+    for (let y = reverseSweep ? ny - 2 : 0; reverseSweep ? (y >= 0) : (y < ny - 1); y += yStep) {
+      const inChanA = hasChannel && (y >= channelYStart && y <= channelYEnd);
+      const inChanB = hasChannel && ((y + 1) >= channelYStart && (y + 1) <= channelYEnd);
+      for (let x = xStart; x !== xEnd; x += xStep) {
+        const idxA = y * nx + x;
+        const idxB = idxA + nx;
+
+        const DA = DmapGrid[idxA];
+        const DB = DmapGrid[idxB];
+        const Dface = (2.0 * DA * DB) / (DA + DB + 1e-8);
+        if (Dface < 1e-8) continue;
+
+        const isMem = (x >= memStart && x < memEnd);
+        const kA = (isMem && !inChanA) ? kVal : 1.0;
+        const kB = (isMem && !inChanB) ? kVal : 1.0;
+
+        const uA = uGrid[idxA];
+        const uB = uGrid[idxB];
+
+        let drivingForce = uB - uA;
+        if (hasCross && (uA > 1e-5 || uB > 1e-5)) {
+          const cAvg = 0.5 * (CGrid[idxA] + CGrid[idxB]);
+          const satFactor = cAvg / (cAvg + 0.25);
+          drivingForce += -0.08 * chi * satFactor * (otherUGrid[idxB] - otherUGrid[idxA]);
+        }
+
+        const denom = 1.0 + dtSub * Dface * (1.0 / kA + 1.0 / kB);
+        let dM = (dtSub * Dface * drivingForce) / denom;
+
+        if (dM > 0) {
+          dM = Math.min(dM, 0.99 * CGrid[idxB]);
+        } else if (dM < 0) {
+          dM = Math.max(dM, -0.99 * CGrid[idxA]);
+        }
+
+        if (maskGrid[idxA] === -1) {
+          CGrid[idxA] += dM;
+          uGrid[idxA] = CGrid[idxA] / kA;
+        }
+        if (maskGrid[idxB] === -1) {
+          CGrid[idxB] -= dM;
+          uGrid[idxB] = CGrid[idxB] / kB;
+        }
+      }
+    }
+
+    // 3. Enforce persistent sources/sinks if any exist
     for (let y = 0; y < ny; y++) {
-      const yAbove = (y > 0) ? y - 1 : -1;
-      const yBelow = (y < ny - 1) ? y + 1 : -1;
-
+      const inChannelY = hasChannel && (y >= channelYStart && y <= channelYEnd);
       for (let x = 0; x < nx; x++) {
         const idx = y * nx + x;
-
-        if (this.mask[idx] === 0) {
-          uGrid[idx] = 1.0;
-          continue;
-        } else if (this.mask[idx] === 1) {
+        const m = maskGrid[idx];
+        if (m === -1) continue;
+        const isMem = (x >= memStart && x < memEnd);
+        const kCell = (isMem && !inChannelY) ? kVal : 1.0;
+        if (m === 0) {
+          uGrid[idx] = srcU;
+          CGrid[idx] = kCell * srcU;
+        } else if (m === 1) {
           uGrid[idx] = 0.0;
-          continue;
+          CGrid[idx] = 0.0;
         }
-
-        const xLeft = (x > 0) ? x - 1 : -1;
-        const xRight = (x < nx - 1) ? x + 1 : -1;
-
-        const uCenter = uGrid[idx];
-        const Dcenter = DmapGrid[idx];
-
-        let sumWeight = 0;
-        let sumWeightedU = 0;
-
-        if (xLeft >= 0) {
-          const D_L = 2.0 * Dcenter * DmapGrid[y * nx + xLeft] / (Dcenter + DmapGrid[y * nx + xLeft] + 1e-6);
-          sumWeight += D_L;
-          sumWeightedU += D_L * uGrid[y * nx + xLeft];
-        }
-        if (xRight >= 0) {
-          const D_R = 2.0 * Dcenter * DmapGrid[y * nx + xRight] / (Dcenter + DmapGrid[y * nx + xRight] + 1e-6);
-          sumWeight += D_R;
-          sumWeightedU += D_R * uGrid[y * nx + xRight];
-        }
-        if (yAbove >= 0) {
-          const D_A = 2.0 * Dcenter * DmapGrid[yAbove * nx + x] / (Dcenter + DmapGrid[yAbove * nx + x] + 1e-6);
-          sumWeight += D_A;
-          sumWeightedU += D_A * uGrid[yAbove * nx + x];
-        }
-        if (yBelow >= 0) {
-          const D_B = 2.0 * Dcenter * DmapGrid[yBelow * nx + x] / (Dcenter + DmapGrid[yBelow * nx + x] + 1e-6);
-          sumWeight += D_B;
-          sumWeightedU += D_B * uGrid[yBelow * nx + x];
-        }
-
-        if (sumWeight < 1e-8) continue;
-
-        const targetU = sumWeightedU / sumWeight;
-        const decay = 1.0 - Math.exp(-sumWeight * 0.015);
-        const val = uCenter + decay * (targetU - uCenter);
-        uGrid[idx] = Number.isFinite(val) ? Math.max(0, Math.min(5.0, val)) : 0;
       }
     }
   }
 
-  // Kinetics of precipitation / crystallization and dissolution with strict mass conservation
+  /**
+   * Kinetics of aqueous precipitation / crystallization, redissolution, and interfacial cake deposition.
+   * Strictly conserves total mass (C_free + C_precip = const).
+   * - Solubility limit C_sat applies in aqueous chambers (inside the hydrophobic membrane core, saturation scales by K * C_sat).
+   * - Suspended micro-crystals in the donor chamber slowly drift/sediment toward the donor-membrane wall (x = memStart - 1),
+   *   building a realistic physical cake layer over time.
+   */
   applyCrystallizationKinetics(dt) {
+    const nx = this.nx;
+    const ny = this.ny;
+
     if (this.params.regime !== 'crystallization') {
-      this.C_precip_A.fill(0);
-      this.C_precip_B.fill(0);
+      // If switching back to infinite dilution, return any precipitated crystals back to dissolved monomer so mass is conserved!
+      for (let i = 0; i < nx * ny; i++) {
+        if (this.C_precip_A[i] > 0) {
+          this.C_A[i] += this.C_precip_A[i];
+          this.C_precip_A[i] = 0;
+        }
+        if (this.C_precip_B[i] > 0) {
+          this.C_B[i] += this.C_precip_B[i];
+          this.C_precip_B[i] = 0;
+        }
+      }
+      this.updatePotentialFromConcentration();
       return;
     }
 
     const sA = this.params.soluteA;
     const sB = this.params.soluteB;
 
-    const satA = Math.max(0.01, sA.solubilityLimit || 1.2);
-    const kCrystA = sA.crystRate || 0.15;
-    const kDissolA = sA.dissolRate || 0.03;
+    const satA = Math.max(0.05, sA.solubilityLimit !== undefined ? sA.solubilityLimit : 1.2);
+    const kCrystA = sA.crystRate !== undefined ? sA.crystRate : 0.15;
+    const kDissolA = sA.dissolRate !== undefined ? sA.dissolRate : 0.03;
 
-    const satB = Math.max(0.01, sB.solubilityLimit || 0.6);
-    const kCrystB = sB.crystRate || 0.12;
-    const kDissolB = sB.dissolRate || 0.04;
+    const satB = Math.max(0.05, sB.solubilityLimit !== undefined ? sB.solubilityLimit : 0.6);
+    const kCrystB = sB.crystRate !== undefined ? sB.crystRate : 0.12;
+    const kDissolB = sB.dissolRate !== undefined ? sB.dissolRate : 0.04;
 
-    const nx = this.nx;
-    const ny = this.ny;
+    const KA = Math.max(0.01, sA.partitionK);
+    const KB = Math.max(0.01, sB.partitionK);
 
-    for (let i = 0; i < nx * ny; i++) {
-      // 1. Solute A kinetics
-      const cFreeA = this.C_A[i];
-      const cPrecipA = this.C_precip_A[i];
+    // 1. Local nucleation / crystallization and dissolution
+    for (let y = 0; y < ny; y++) {
+      for (let x = 0; x < nx; x++) {
+        const idx = y * nx + x;
+        const kCellA = this.getCellK(x, y, KA);
+        const kCellB = this.getCellK(x, y, KB);
 
-      if (cFreeA > satA) {
-        const delta = cFreeA - satA;
-        const rate = kCrystA * (delta / satA) * dt * 1.5;
-        const toPrecip = Math.min(delta, rate);
-        this.C_A[i] -= toPrecip;
-        this.C_precip_A[i] += toPrecip;
-      } else if (cFreeA < satA && cPrecipA > 0) {
-        const capacity = satA - cFreeA;
-        const toDissolve = Math.min(cPrecipA, Math.min(capacity, kDissolA * capacity * dt));
-        this.C_A[i] += toDissolve;
-        this.C_precip_A[i] -= toDissolve;
+        // Local thermodynamic saturation threshold scales by kCell (so membrane interior saturation is K * C_sat)
+        const localSatA = satA * kCellA;
+        const localSatB = satB * kCellB;
+
+        // Solute A
+        const cFreeA = this.C_A[idx];
+        const cPrecipA = this.C_precip_A[idx];
+        if (cFreeA > localSatA && kCrystA > 0) {
+          const delta = cFreeA - localSatA;
+          const frac = 1.0 - Math.exp(-kCrystA * (1.0 + delta / localSatA) * dt);
+          const toPrecip = delta * frac;
+          this.C_A[idx] -= toPrecip;
+          this.C_precip_A[idx] += toPrecip;
+        } else if (cFreeA < localSatA && cPrecipA > 0) {
+          const capacity = localSatA - cFreeA;
+          const frac = 1.0 - Math.exp(-kDissolA * dt);
+          const toDissolve = Math.min(cPrecipA, capacity * frac);
+          this.C_A[idx] += toDissolve;
+          this.C_precip_A[idx] -= toDissolve;
+        }
+
+        // Solute B
+        const cFreeB = this.C_B[idx];
+        const cPrecipB = this.C_precip_B[idx];
+        if (cFreeB > localSatB && kCrystB > 0) {
+          const delta = cFreeB - localSatB;
+          const frac = 1.0 - Math.exp(-kCrystB * (1.0 + delta / localSatB) * dt);
+          const toPrecip = delta * frac;
+          this.C_B[idx] -= toPrecip;
+          this.C_precip_B[idx] += toPrecip;
+        } else if (cFreeB < localSatB && cPrecipB > 0) {
+          const capacity = localSatB - cFreeB;
+          const frac = 1.0 - Math.exp(-kDissolB * dt);
+          const toDissolve = Math.min(cPrecipB, capacity * frac);
+          this.C_B[idx] += toDissolve;
+          this.C_precip_B[idx] -= toDissolve;
+        }
       }
+    }
 
-      // 2. Solute B kinetics
-      const cFreeB = this.C_B[i];
-      const cPrecipB = this.C_precip_B[i];
+    // 2. Interfacial convective / phoretic drift of suspended donor crystals toward the membrane wall (cake layer buildup)
+    const driftRateA = Math.min(0.35, 0.06 * (sA.foulingFactor !== undefined ? sA.foulingFactor : 0.6) * dt);
+    const driftRateB = Math.min(0.35, 0.06 * (sB.foulingFactor !== undefined ? sB.foulingFactor : 0.4) * dt);
+    const wallX = Math.max(0, this.memStart - 1);
 
-      if (cFreeB > satB) {
-        const delta = cFreeB - satB;
-        const rate = kCrystB * (delta / satB) * dt * 1.5;
-        const toPrecip = Math.min(delta, rate);
-        this.C_B[i] -= toPrecip;
-        this.C_precip_B[i] += toPrecip;
-      } else if (cFreeB < satB && cPrecipB > 0) {
-        const capacity = satB - cFreeB;
-        const toDissolve = Math.min(cPrecipB, Math.min(capacity, kDissolB * capacity * dt));
-        this.C_B[i] += toDissolve;
-        this.C_precip_B[i] -= toDissolve;
+    if (driftRateA > 1e-6 || driftRateB > 1e-6) {
+      for (let y = 0; y < ny; y++) {
+        // Sweep from wallX - 1 down to 0 so mass shifts rightwards toward wallX without loss
+        for (let x = wallX - 1; x >= 0; x--) {
+          const idx = y * nx + x;
+          const idxRight = y * nx + (x + 1);
+
+          if (driftRateA > 0 && this.C_precip_A[idx] > 1e-5) {
+            const moveA = this.C_precip_A[idx] * driftRateA;
+            this.C_precip_A[idx] -= moveA;
+            this.C_precip_A[idxRight] += moveA;
+          }
+          if (driftRateB > 0 && this.C_precip_B[idx] > 1e-5) {
+            const moveB = this.C_precip_B[idx] * driftRateB;
+            this.C_precip_B[idx] -= moveB;
+            this.C_precip_B[idxRight] += moveB;
+          }
+        }
       }
     }
 
@@ -447,19 +617,32 @@ class PhysicsEngine {
   step(userSubsteps = 2) {
     const speed = Math.max(0.1, this.params.speedMultiplier);
     const dtFrame = (1 / 30.0) * speed;
-    const numSubsteps = Math.min(96, Math.max(12, Math.round(12 * Math.pow(speed, 0.30))));
 
-    for (let step = 0; step < numSubsteps; step++) {
-      this.solveFickSubstep(this.u_A, this.Dmap_A);
-      this.solveFickSubstep(this.u_B, this.Dmap_B);
+    // Scale substeps and per-substep timestep proportionally so physical time and diffusion progress stay 1:1 across all speed multipliers
+    const numSubsteps = Math.min(160, Math.max(12, Math.ceil(12 * Math.sqrt(speed))));
+    const dtSub = (dtFrame * 0.45) / numSubsteps;
+
+    const KA = this.params.soluteA.partitionK;
+    const KB = this.params.soluteB.partitionK;
+
+    for (let s = 0; s < numSubsteps; s++) {
+      const rev = ((s + (this._sweepFlip ? 1 : 0)) % 2 === 1);
+      this.solveFickSubstep(this.C_A, this.u_A, this.Dmap_A, KA, this.mask_A, this.u_B, dtSub, rev);
+      this.solveFickSubstep(this.C_B, this.u_B, this.Dmap_B, KB, this.mask_B, this.u_A, dtSub, rev);
+    }
+    this._sweepFlip = !this._sweepFlip;
+
+    // Sub-step crystallization kinetics for stability at high speed multipliers
+    const crystSteps = Math.min(20, Math.max(1, Math.ceil(dtFrame / 0.5)));
+    const dtCryst = dtFrame / crystSteps;
+    for (let c = 0; c < crystSteps; c++) {
+      this.applyCrystallizationKinetics(dtCryst);
     }
 
-    this.updateConcentrationFromPotential();
-    this.applyCrystallizationKinetics(dtFrame);
     this.rebuildDiffusionMap(); // Updates local diffusion with cross-interaction and cake resistance
-    this.updateParticles(dtFrame);
-    this.recordFluxMetrics();
+    this.updateParticles(Math.min(0.25, dtFrame));
     this.time += dtFrame;
+    this.recordFluxMetrics(false);
   }
 
   updateParticles(dt) {
@@ -537,9 +720,6 @@ class PhysicsEngine {
   }
 
   syncParticlePopulationWithConcentration() {
-    const nx = this.nx;
-    const ny = this.ny;
-
     const c1D_A = this.getProfile1D('A');
     const c1D_B = this.getProfile1D('B');
 
@@ -598,7 +778,7 @@ class PhysicsEngine {
     }
   }
 
-  recordFluxMetrics() {
+  recordFluxMetrics(force = false) {
     let rightMassA = 0, rightMassB = 0;
     let count = 0;
     for (let y = 0; y < this.ny; y++) {
@@ -611,32 +791,62 @@ class PhysicsEngine {
     const avgRightConcA = count > 0 ? rightMassA / count : 0;
     const avgRightConcB = count > 0 ? rightMassB / count : 0;
 
-    let instantFluxA = 0, instantFluxB = 0;
-    if (this.fluxHistory.length > 0) {
-      const prev = this.fluxHistory[this.fluxHistory.length - 1];
-      const dt = 0.1;
-      instantFluxA = Math.max(0, (avgRightConcA - (prev ? prev.concA : 0)) / dt);
-      instantFluxB = Math.max(0, (avgRightConcB - (prev ? prev.concB : 0)) / dt);
+    const n = this.timeHistory.length;
+    const lastTime = n > 0 ? this.timeHistory[n - 1] : -1;
+    const actualDt = n > 0 ? (this.time - lastTime) : 0;
+
+    if (!force && n > 0 && actualDt < this.historySampleInterval) {
+      return;
     }
 
-    if (this.timeHistory.length === 0 || this.time - this.timeHistory[this.timeHistory.length - 1] >= 0.25) {
-      this.timeHistory.push(this.time);
-      this.fluxHistory.push({
-        concA: avgRightConcA,
-        fluxA: instantFluxA,
-        concB: avgRightConcB,
-        fluxB: instantFluxB
-      });
-      if (this.timeHistory.length > 250) {
-        this.timeHistory.shift();
-        this.fluxHistory.shift();
+    let instantFluxA = 0, instantFluxB = 0;
+    if (n > 0 && actualDt > 1e-6) {
+      const prev = this.fluxHistory[n - 1];
+      const rawFluxA = Math.max(0, (avgRightConcA - prev.concA) / actualDt);
+      const rawFluxB = Math.max(0, (avgRightConcB - prev.concB) / actualDt);
+      // Exponential smoothing for clean derivative display
+      instantFluxA = prev.fluxA > 0 ? (0.65 * prev.fluxA + 0.35 * rawFluxA) : rawFluxA;
+      instantFluxB = prev.fluxB > 0 ? (0.65 * prev.fluxB + 0.35 * rawFluxB) : rawFluxB;
+    }
+
+    this.timeHistory.push(this.time);
+    this.fluxHistory.push({
+      concA: avgRightConcA,
+      fluxA: instantFluxA,
+      concB: avgRightConcB,
+      fluxB: instantFluxB
+    });
+
+    // Adaptive decimation: when history exceeds 400 points, keep every 2nd point (preserving t=0 and full history)
+    if (this.timeHistory.length > 400) {
+      const newTimes = [this.timeHistory[0]];
+      const newFluxes = [this.fluxHistory[0]];
+      for (let i = 2; i < this.timeHistory.length; i += 2) {
+        newTimes.push(this.timeHistory[i]);
+        newFluxes.push(this.fluxHistory[i]);
       }
+      this.timeHistory = newTimes;
+      this.fluxHistory = newFluxes;
+      this.historySampleInterval *= 2.0;
     }
   }
 
   getProfile1D(solute = 'A') {
     const profile = new Float32Array(this.nx);
     const grid = (solute === 'B') ? this.C_B : this.C_A;
+    for (let x = 0; x < this.nx; x++) {
+      let sum = 0;
+      for (let y = 0; y < this.ny; y++) {
+        sum += grid[y * this.nx + x];
+      }
+      profile[x] = sum / this.ny;
+    }
+    return profile;
+  }
+
+  getPotentialProfile1D(solute = 'A') {
+    const profile = new Float32Array(this.nx);
+    const grid = (solute === 'B') ? this.u_B : this.u_A;
     for (let x = 0; x < this.nx; x++) {
       let sum = 0;
       for (let y = 0; y < this.ny; y++) {
@@ -660,22 +870,24 @@ class PhysicsEngine {
     return profile;
   }
 
-  calculateSingleSoluteMetrics(soluteSpec, precipGrid, freeGrid) {
-    const { order, fluidity, thicknessNm, regime } = this.params;
-    const baseD = soluteSpec.dBase25C || 2.30;
-    const tempFactor = this.getTemperatureFactor();
+  getSurfaceCakeConcentration(solute = 'both') {
+    if (this.params.regime !== 'crystallization') return 0;
+    const wallX = Math.max(0, this.memStart - 1);
+    let sumA = 0, sumB = 0;
+    for (let y = 0; y < this.ny; y++) {
+      sumA += this.C_precip_A[y * this.nx + wallX] + this.C_precip_A[y * this.nx + this.memStart];
+      sumB += this.C_precip_B[y * this.nx + wallX] + this.C_precip_B[y * this.nx + this.memStart];
+    }
+    sumA /= this.ny;
+    sumB /= this.ny;
+    if (solute === 'A') return sumA;
+    if (solute === 'B') return sumB;
+    return sumA + sumB;
+  }
 
-    const rh = this.computeHydrodynamicRadius(soluteSpec);
-    const fShape = this.getPerrinShapeFactor(soluteSpec.soluteShape, soluteSpec.aspectRatio);
-
-    const radRatio = 0.17 / Math.max(0.08, rh);
-    const dWaterCm2s = baseD * radRatio * tempFactor * 1e-5;
-
-    const memAffinity = soluteSpec.membraneAffinity !== undefined ? soluteSpec.membraneAffinity : 0.5;
-    const orderFactor = Math.max(0.02, 1.0 - 0.82 * order);
-    const gammaMem = 0.00016 * (0.5 + memAffinity);
-
-    const dMemCm2s = dWaterCm2s * gammaMem * fluidity * orderFactor * Math.pow(radRatio, 0.6) / Math.sqrt(fShape);
+  calculateSingleSoluteMetrics(soluteSpec, precipGrid, freeGrid, soluteKey = 'A') {
+    const { thicknessNm, regime } = this.params;
+    const { rh, fShape, dWaterCm2s, dMemCm2s } = this.computePhysicalDiffusivities(soluteSpec);
 
     const thicknessCm = thicknessNm * 1e-7;
     const P0 = (soluteSpec.partitionK * dMemCm2s) / thicknessCm;
@@ -692,12 +904,9 @@ class PhysicsEngine {
     // Cake fouling resistance effect on effective permeability
     let cakeFactor = 1.0;
     if (regime === 'crystallization') {
-      let surfacePrecip = 0;
-      for (let y = 0; y < this.ny; y++) {
-        surfacePrecip += precipGrid[y * this.nx + this.memStart];
-      }
-      surfacePrecip /= this.ny;
-      cakeFactor = 1.0 + (soluteSpec.foulingFactor || 0.5) * surfacePrecip;
+      const surfacePrecip = this.getSurfaceCakeConcentration(soluteKey);
+      const fouling = soluteSpec.foulingFactor !== undefined ? soluteSpec.foulingFactor : 0.5;
+      cakeFactor = 1.0 + fouling * surfacePrecip * 2.5;
     }
     const P = P0 / cakeFactor;
     const logP = Math.log10(Math.max(1e-12, P));
@@ -709,6 +918,8 @@ class PhysicsEngine {
 
     return {
       name: soluteSpec.name,
+      rhNm: rh.toFixed(2),
+      fShape: fShape.toFixed(2),
       dWaterCm2s: dWaterCm2s.toExponential(2),
       dMemCm2s: dMemCm2s.toExponential(2),
       P_val: P,
@@ -723,8 +934,8 @@ class PhysicsEngine {
   }
 
   getCalculatedMetrics() {
-    const metricsA = this.calculateSingleSoluteMetrics(this.params.soluteA, this.C_precip_A, this.C_A);
-    const metricsB = this.calculateSingleSoluteMetrics(this.params.soluteB, this.C_precip_B, this.C_B);
+    const metricsA = this.calculateSingleSoluteMetrics(this.params.soluteA, this.C_precip_A, this.C_A, 'A');
+    const metricsB = this.calculateSingleSoluteMetrics(this.params.soluteB, this.C_precip_B, this.C_B, 'B');
 
     return {
       regime: this.params.regime,
@@ -742,28 +953,44 @@ class PhysicsEngine {
     };
   }
 
-  paintSolute(gridX, gridY, radius, tool = 'source', solute = 'A') {
-    const targetC = (solute === 'B') ? this.C_B : this.C_A;
-    const targetU = (solute === 'B') ? this.u_B : this.u_A;
-    const targetP = (solute === 'B') ? this.C_precip_B : this.C_precip_A;
+  paintSolute(gridX, gridY, radius, tool = 'source', solute = 'both') {
+    const applyToSolute = (sKey) => {
+      const targetC = (sKey === 'B') ? this.C_B : this.C_A;
+      const targetU = (sKey === 'B') ? this.u_B : this.u_A;
+      const targetP = (sKey === 'B') ? this.C_precip_B : this.C_precip_A;
+      const targetMask = (sKey === 'B') ? this.mask_B : this.mask_A;
+      const spec = (sKey === 'B') ? this.params.soluteB : this.params.soluteA;
+      const K = Math.max(0.01, spec.partitionK);
+      const srcVal = spec.initialConc || 1.5;
 
-    for (let y = Math.max(0, gridY - radius); y <= Math.min(this.ny - 1, gridY + radius); y++) {
-      for (let x = Math.max(0, gridX - radius); x <= Math.min(this.nx - 1, gridX + radius); x++) {
-        const dist = Math.hypot(x - gridX, y - gridY);
-        if (dist <= radius) {
-          const idx = y * this.nx + x;
-          if (tool === 'source') {
-            targetC[idx] = 1.5;
-            targetU[idx] = 1.5;
-          } else if (tool === 'sink' || tool === 'erase') {
-            targetC[idx] = 0.0;
-            targetU[idx] = 0.0;
-            targetP[idx] = 0.0;
+      for (let y = Math.max(0, gridY - radius); y <= Math.min(this.ny - 1, gridY + radius); y++) {
+        for (let x = Math.max(0, gridX - radius); x <= Math.min(this.nx - 1, gridX + radius); x++) {
+          const dist = Math.hypot(x - gridX, y - gridY);
+          if (dist <= radius) {
+            const idx = y * this.nx + x;
+            const kCell = this.getCellK(x, y, K);
+            if (tool === 'source') {
+              targetMask[idx] = 0; // Persistent fixed source
+              targetU[idx] = srcVal;
+              targetC[idx] = kCell * srcVal;
+            } else if (tool === 'sink') {
+              targetMask[idx] = 1; // Persistent fixed sink
+              targetU[idx] = 0.0;
+              targetC[idx] = 0.0;
+              targetP[idx] = 0.0;
+            } else if (tool === 'erase') {
+              targetMask[idx] = -1; // Clear source/sink mask and local concentration
+              targetU[idx] = 0.0;
+              targetC[idx] = 0.0;
+              targetP[idx] = 0.0;
+            }
           }
         }
       }
-    }
-    this.updatePotentialFromConcentration();
+    };
+
+    if (solute === 'A' || solute === 'both') applyToSolute('A');
+    if (solute === 'B' || solute === 'both') applyToSolute('B');
   }
 }
 

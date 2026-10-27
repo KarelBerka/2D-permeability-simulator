@@ -1,6 +1,6 @@
 /**
  * render.js - 2D Membrane Permeability Visualizer & Canvas Render Engine (Dual-Solute & Crystallization)
- * Implements Blue/Red composite heatmaps, marching isolines, discrete solute particles,
+ * Implements dynamically normalized Blue/Red composite heatmaps, marching isolines, discrete solute particles,
  * lipid bilayer structure, and sparkling crystalline precipitates & membrane cake layers.
  */
 
@@ -92,6 +92,17 @@ class RenderEngine {
     return cmap;
   }
 
+  // Dynamic reference maximum concentration so heatmap and isolines never saturate at 1.0 mM
+  getSoluteReferenceMax(soluteKey = 'A') {
+    const { params } = this.physics;
+    const spec = soluteKey === 'B' ? params.soluteB : params.soluteA;
+    const c0 = spec.initialConc || 1.0;
+    const sat = params.regime === 'crystallization' ? (spec.solubilityLimit || c0) : c0;
+    const effAqueousMax = Math.max(c0, sat);
+    const maxPartitioned = effAqueousMax * Math.max(1.0, Math.min(3.5, spec.partitionK || 1.0));
+    return Math.max(0.5, maxPartitioned);
+  }
+
   render() {
     this.ctx.clearRect(0, 0, this.width, this.height);
 
@@ -108,6 +119,7 @@ class RenderEngine {
     }
 
     this.renderChannelOverlay();
+    this.renderPersistentSourcesSinks();
   }
 
   renderMacroHeatmap() {
@@ -119,6 +131,9 @@ class RenderEngine {
 
     const cmapA = this.colormaps.soluteA;
     const cmapB = this.colormaps.soluteB;
+
+    const maxRefA = this.getSoluteReferenceMax('A');
+    const maxRefB = this.getSoluteReferenceMax('B');
 
     for (let py = 0; py < this.height; py++) {
       const gy = py * scaleY;
@@ -137,14 +152,16 @@ class RenderEngine {
         const cA10 = C_A[y0 * nx + x1];
         const cA01 = C_A[y1 * nx + x0];
         const cA11 = C_A[y1 * nx + x1];
-        const valA = Math.max(0, Math.min(1.0, (cA00 + wx * (cA10 - cA00)) + wy * ((cA01 + wx * (cA11 - cA01)) - (cA00 + wx * (cA10 - cA00)))));
+        const rawA = (cA00 + wx * (cA10 - cA00)) + wy * ((cA01 + wx * (cA11 - cA01)) - (cA00 + wx * (cA10 - cA00)));
+        const valA = Math.max(0, Math.min(1.0, rawA / maxRefA));
 
         // Interpolate Solute B concentration
         const cB00 = C_B[y0 * nx + x0];
         const cB10 = C_B[y0 * nx + x1];
         const cB01 = C_B[y1 * nx + x0];
         const cB11 = C_B[y1 * nx + x1];
-        const valB = Math.max(0, Math.min(1.0, (cB00 + wx * (cB10 - cB00)) + wy * ((cB01 + wx * (cB11 - cB01)) - (cB00 + wx * (cB10 - cB00)))));
+        const rawB = (cB00 + wx * (cB10 - cB00)) + wy * ((cB01 + wx * (cB11 - cB01)) - (cB00 + wx * (cB10 - cB00)));
+        const valB = Math.max(0, Math.min(1.0, rawB / maxRefB));
 
         const pIdx = (py * this.width + px) * 4;
 
@@ -222,8 +239,8 @@ class RenderEngine {
         const cx = (x + 0.5) * cellW;
         const cy = (y + 0.5) * cellH;
 
-        if ((viewSolute === 'A' || viewSolute === 'both') && pA > 0.05) {
-          const sz = Math.min(6.5, 2.5 + pA * 3.5);
+        if ((viewSolute === 'A' || viewSolute === 'both') && pA > 0.03) {
+          const sz = Math.min(7.0, 2.5 + pA * 3.5);
           const shimmer = Math.sin(time * 5.0 + x * 0.7 + y * 0.9) * 0.25 + 0.75;
 
           this.ctx.save();
@@ -247,8 +264,8 @@ class RenderEngine {
           this.ctx.restore();
         }
 
-        if ((viewSolute === 'B' || viewSolute === 'both') && pB > 0.05) {
-          const sz = Math.min(6.0, 2.2 + pB * 3.2);
+        if ((viewSolute === 'B' || viewSolute === 'both') && pB > 0.03) {
+          const sz = Math.min(6.5, 2.2 + pB * 3.2);
           const shimmer = Math.cos(time * 6.0 + x * 1.1 + y * 0.6) * 0.25 + 0.75;
 
           this.ctx.save();
@@ -276,31 +293,24 @@ class RenderEngine {
 
     // 2. Draw Membrane Cake Layer (Surface Fouling Crust) on donor-membrane wall
     const memX1 = (memStart / nx) * this.width;
-    let surfaceCakeA = 0, surfaceCakeB = 0;
-    for (let y = 0; y < ny; y++) {
-      surfaceCakeA += C_precip_A[y * nx + memStart];
-      surfaceCakeB += C_precip_B[y * nx + memStart];
-    }
-    surfaceCakeA /= ny;
-    surfaceCakeB /= ny;
+    const totalCake = this.physics.getSurfaceCakeConcentration(viewSolute);
 
-    const totalCake = (surfaceCakeA + surfaceCakeB);
-    if (totalCake > 0.08) {
-      const crustThickness = Math.min(14, 3 + totalCake * 8);
+    if (totalCake > 0.03) {
+      const crustThickness = Math.min(18, 4 + totalCake * 8);
 
       const grad = this.ctx.createLinearGradient(memX1 - crustThickness, 0, memX1, 0);
       grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      grad.addColorStop(0.5, 'rgba(200, 240, 255, 0.45)');
-      grad.addColorStop(1, 'rgba(255, 255, 255, 0.85)');
+      grad.addColorStop(0.5, 'rgba(200, 240, 255, 0.55)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0.90)');
 
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(memX1 - crustThickness, 0, crustThickness, this.height);
 
-      // Crystalline texture dots along crust
+      // Crystalline texture facets along crust
       this.ctx.fillStyle = '#ffffff';
-      for (let y = 6; y < this.height; y += 12) {
-        const dotX = memX1 - Math.random() * crustThickness;
-        this.ctx.fillRect(dotX, y, 2.5, 2.5);
+      for (let y = 6; y < this.height; y += 10) {
+        const dotX = memX1 - ((y * 7) % Math.max(2, Math.floor(crustThickness)));
+        this.ctx.fillRect(dotX - 2, y, 2.5, 2.5);
       }
     }
 
@@ -311,14 +321,18 @@ class RenderEngine {
     const { C_A, C_B, nx, ny, viewSolute } = this.physics;
     const cellW = this.width / nx;
     const cellH = this.height / ny;
-    const isoLevels = [0.15, 0.35, 0.60, 0.80];
+    const normLevels = [0.15, 0.35, 0.60, 0.82];
+
+    const maxRefA = this.getSoluteReferenceMax('A');
+    const maxRefB = this.getSoluteReferenceMax('B');
 
     this.ctx.save();
     this.ctx.lineWidth = 1.2;
 
-    const renderGridIsolines = (grid, strokeColor) => {
+    const renderGridIsolines = (grid, maxRef, strokeColor) => {
       this.ctx.strokeStyle = strokeColor;
-      for (let level of isoLevels) {
+      for (let f of normLevels) {
+        const level = f * maxRef;
         this.ctx.beginPath();
         for (let y = 0; y < ny - 1; y += 2) {
           for (let x = 0; x < nx - 1; x += 2) {
@@ -339,17 +353,45 @@ class RenderEngine {
     };
 
     if (viewSolute === 'A' || viewSolute === 'both') {
-      renderGridIsolines(C_A, 'rgba(0, 180, 255, 0.5)');
+      renderGridIsolines(C_A, maxRefA, 'rgba(0, 180, 255, 0.55)');
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      renderGridIsolines(C_B, 'rgba(255, 60, 80, 0.5)');
+      renderGridIsolines(C_B, maxRefB, 'rgba(255, 60, 80, 0.55)');
     }
 
     this.ctx.restore();
   }
 
+  renderPersistentSourcesSinks() {
+    const { mask_A, mask_B, nx, ny, viewSolute } = this.physics;
+    const cellW = this.width / nx;
+    const cellH = this.height / ny;
+
+    this.ctx.save();
+    for (let y = 0; y < ny; y += 2) {
+      for (let x = 0; x < nx; x += 2) {
+        const idx = y * nx + x;
+        const mA = mask_A ? mask_A[idx] : -1;
+        const mB = mask_B ? mask_B[idx] : -1;
+
+        const cx = (x + 0.5) * cellW;
+        const cy = (y + 0.5) * cellH;
+
+        if ((viewSolute !== 'B' && mA === 0) || (viewSolute !== 'A' && mB === 0)) {
+          this.ctx.strokeStyle = 'rgba(0, 245, 212, 0.65)';
+          this.ctx.lineWidth = 1;
+          this.ctx.strokeRect(cx - cellW, cy - cellH, cellW * 2, cellH * 2);
+        } else if ((viewSolute !== 'B' && mA === 1) || (viewSolute !== 'A' && mB === 1)) {
+          this.ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+          this.ctx.fillRect(cx - cellW, cy - cellH, cellW * 2, cellH * 2);
+        }
+      }
+    }
+    this.ctx.restore();
+  }
+
   renderParticles() {
-    const { particles, nx, ny, viewSolute } = this.physics;
+    const { particles, nx, ny, viewSolute, params } = this.physics;
     const scaleX = this.width / nx;
     const scaleY = this.height / ny;
 
@@ -359,29 +401,39 @@ class RenderEngine {
       if (viewSolute === 'A' && p.type !== 'A') continue;
       if (viewSolute === 'B' && p.type !== 'B') continue;
 
+      const isA = (p.type === 'A');
+      const spec = isA ? params.soluteA : params.soluteB;
+      const shape = spec.soluteShape || 'sphere';
+      const aspect = Math.max(1.0, Math.min(3.5, spec.aspectRatio || 1.0));
+
       const cx = p.x * scaleX;
       const cy = p.y * scaleY;
-      const radius = p.radius || (p.type === 'A' ? 3.5 : 3.0);
-      const isA = (p.type === 'A');
+      const baseR = p.radius || (isA ? 3.5 : 3.0);
 
       this.ctx.save();
       this.ctx.translate(cx, cy);
+      if (shape !== 'sphere' && aspect > 1.05) {
+        this.ctx.rotate(p.angle || 0);
+        const rx = baseR * Math.pow(aspect, 0.45);
+        const ry = baseR / Math.pow(aspect, 0.35);
+        this.ctx.scale(rx / baseR, ry / baseR);
+      }
 
-      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, baseR);
       grad.addColorStop(0, '#ffffff');
       grad.addColorStop(0.5, isA ? '#0077ff' : '#ff3344');
       grad.addColorStop(1, isA ? 'rgba(0, 119, 255, 0)' : 'rgba(255, 51, 68, 0)');
 
       this.ctx.fillStyle = grad;
       this.ctx.beginPath();
-      this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      this.ctx.arc(0, 0, baseR, 0, Math.PI * 2);
       this.ctx.fill();
 
       // Inner core glow
       this.ctx.strokeStyle = isA ? 'rgba(0, 200, 255, 0.8)' : 'rgba(255, 150, 160, 0.8)';
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
-      this.ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+      this.ctx.arc(0, 0, baseR * 0.4, 0, Math.PI * 2);
       this.ctx.stroke();
 
       this.ctx.restore();

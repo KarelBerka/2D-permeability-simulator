@@ -1,8 +1,8 @@
 /**
  * minisims.js - Isolated Mini-Simulators for Key Permeability Parameters
- * 1. Partition Coefficient K (Membrane-Water Phase Equilibrium)
+ * 1. Partition Coefficient K (Membrane-Water Phase Equilibrium with Exact Detailed Balance)
  * 2. Diffusion Coefficient D (Stokes-Einstein Brownian Motion & Dispersion)
- * 3. Overton Synthesis: P = K * D / d
+ * 3. Overton Synthesis: P = K * D_mem / d (Unified with Main Physics Engine)
  */
 
 class MiniSimulators {
@@ -28,9 +28,9 @@ class MiniSimulators {
     this.partRunning = true;
     this.targetK = 3.05; // Default Ibuprofen K
     this.partParticles = [];
-    this.numPartParticles = 140;
+    this.numPartParticles = 160;
 
-    // Boundary interface at 50% width
+    // Boundary interface at 50% width (equal volumes V_water = V_lipid)
     this.interfaceX = this.partW * 0.5;
 
     this.resetPartitionParticles();
@@ -39,18 +39,20 @@ class MiniSimulators {
 
   resetPartitionParticles() {
     this.partParticles = [];
+    // Initialize near equilibrium distribution so students can also watch relaxation when K is changed
+    const pLipid = this.targetK / (1.0 + this.targetK);
     for (let i = 0; i < this.numPartParticles; i++) {
-      // Start evenly distributed in water (left phase)
+      // Start in water so students observe partitioning into the membrane
       const x = Math.random() * (this.interfaceX - 16) + 8;
       const y = Math.random() * (this.partH - 16) + 8;
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1.4 + Math.random() * 0.8;
+      const speed = 1.65;
       this.partParticles.push({
         x, y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         radius: 3.2,
-        phase: 'water' // 'water' or 'lipid'
+        phase: 'water'
       });
     }
   }
@@ -110,32 +112,37 @@ class MiniSimulators {
   updatePartitionPhysics() {
     if (!this.partRunning) return;
 
-    const K = this.targetK;
+    const K = Math.max(0.02, this.targetK);
     const boundaryX = this.interfaceX;
     const w = this.partW;
     const h = this.partH;
 
-    // Transition probabilities across membrane interface
-    // Thermodynamic equilibrium requires: N_lipid / N_water = K
-    const baseP = 0.55;
-    const pEnterLipid = Math.min(0.95, baseP * Math.sqrt(K));
-    const pEnterWater = Math.min(0.95, baseP / Math.max(1e-4, Math.sqrt(K)));
+    // Speed in water and lipid:
+    const vWater = 1.9;
+    const vLipid = 1.3;
+
+    // Exact Detailed Balance at the interface:
+    // Flux(water -> lipid) = C_water * vWater * pEnterLipid
+    // Flux(lipid -> water) = C_lipid * vLipid * pEnterWater
+    // At equilibrium, C_lipid / C_water = K  ==>  pEnterLipid / pEnterWater = K * (vLipid / vWater)
+    const fluxRatio = K * (vLipid / vWater);
+    const pEnterLipid = fluxRatio >= 1.0 ? 0.90 : 0.90 * fluxRatio;
+    const pEnterWater = fluxRatio >= 1.0 ? (0.90 / fluxRatio) : 0.90;
 
     for (let p of this.partParticles) {
       // Brownian thermal fluctuation
       p.vx += (Math.random() - 0.5) * 0.45;
       p.vy += (Math.random() - 0.5) * 0.45;
 
-      // Dampen velocity to prevent explosion
+      // Maintain phase thermal speed
       const spd = Math.hypot(p.vx, p.vy);
-      const targetSpd = (p.x > boundaryX) ? 1.3 : 1.9; // Slower in lipid phase
+      const targetSpd = (p.x >= boundaryX) ? vLipid : vWater;
       if (spd > 0.01) {
-        p.vx = (p.vx / spd) * (0.88 * spd + 0.12 * targetSpd);
-        p.vy = (p.vy / spd) * (0.88 * spd + 0.12 * targetSpd);
+        p.vx = (p.vx / spd) * (0.85 * spd + 0.15 * targetSpd);
+        p.vy = (p.vy / spd) * (0.85 * spd + 0.15 * targetSpd);
       }
 
       const nextX = p.x + p.vx;
-      const nextY = p.y + p.vy;
 
       // Check crossing of phase interface
       if (p.x < boundaryX && nextX >= boundaryX) {
@@ -144,7 +151,6 @@ class MiniSimulators {
           p.x = nextX;
           p.phase = 'lipid';
         } else {
-          // Repelled by phase barrier
           p.vx = -Math.abs(p.vx);
           p.x = boundaryX - 1;
         }
@@ -242,7 +248,7 @@ class MiniSimulators {
     const total = countWater + countLipid;
     const pctWater = total > 0 ? (countWater / total * 100) : 50;
     const pctLipid = total > 0 ? (countLipid / total * 100) : 50;
-    const kObs = countWater > 0 ? (countLipid / countWater) : 0;
+    const kObs = countWater > 0 ? (countLipid / countWater) : this.targetK;
 
     if (badgeNWater) badgeNWater.textContent = countWater;
     if (badgeNLipid) badgeNLipid.textContent = countLipid;
@@ -267,7 +273,7 @@ class MiniSimulators {
 
     // Physical Parameters
     this.diffRadiusNm = 0.45; // nm (Ibuprofen rh)
-    this.diffMedium = 'water'; // 'water' (1 cP), 'olive_oil' (40 cP), 'lipid' (90 cP)
+    this.diffMedium = 'water'; // 'water' (0.69 cP), 'olive_oil' (40 cP), 'lipid' (90 cP)
     this.diffTempC = 37.0; // °C
 
     // Pulse / Drop Mode tracking
@@ -280,20 +286,25 @@ class MiniSimulators {
   }
 
   computeDcm2s() {
-    // Stokes-Einstein relation: D = (k_B * T) / (6 * pi * eta * r_h)
-    const kB = 1.380649e-23; // J / K
-    const T = this.diffTempC + 273.15;
-    const rh_m = this.diffRadiusNm * 1e-9;
-
-    let eta_Pas = 0.00069; // Water at 37°C ~ 0.69 mPa.s
-    if (this.diffMedium === 'olive_oil') {
-      eta_Pas = 0.040; // ~40 mPa.s
-    } else if (this.diffMedium === 'lipid') {
-      eta_Pas = 0.090; // ~90 mPa.s lipid acyl core
+    // Unified with main PhysicsEngine so numbers match between synthesis card and main sidebar
+    if (this.mainPhysics) {
+      const dummySpec = Object.assign({}, this.mainPhysics.params.soluteA, {
+        radiusNm: this.diffRadiusNm,
+        manualRadiusOverride: true
+      });
+      const { dWaterCm2s, dMemCm2s } = this.mainPhysics.computePhysicalDiffusivities(dummySpec, this.diffTempC);
+      if (this.diffMedium === 'water') return dWaterCm2s;
+      if (this.diffMedium === 'olive_oil') return dWaterCm2s * 0.018;
+      return dMemCm2s;
     }
 
-    const D_m2s = (kB * T) / (6 * Math.PI * eta_Pas * rh_m);
-    return D_m2s * 1e4; // Convert m2/s to cm2/s
+    const kB = 1.380649e-23;
+    const T = this.diffTempC + 273.15;
+    const rh_m = this.diffRadiusNm * 1e-9;
+    let eta_Pas = 0.00069;
+    if (this.diffMedium === 'olive_oil') eta_Pas = 0.040;
+    else if (this.diffMedium === 'lipid') eta_Pas = 0.090;
+    return ((kB * T) / (6 * Math.PI * eta_Pas * rh_m)) * 1e4;
   }
 
   resetDiffusionParticles(asPulse = false) {
@@ -304,13 +315,11 @@ class MiniSimulators {
     for (let i = 0; i < this.numDiffParticles; i++) {
       let x, y;
       if (asPulse) {
-        // Condensed droplet at center
         const r = Math.random() * 8;
         const theta = Math.random() * Math.PI * 2;
         x = centerX + r * Math.cos(theta);
         y = centerY + r * Math.sin(theta);
       } else {
-        // Uniform random throughout box
         x = Math.random() * (this.diffW - 20) + 10;
         y = Math.random() * (this.diffH - 20) + 10;
       }
@@ -415,7 +424,6 @@ class MiniSimulators {
     const h = this.diffH;
 
     for (let p of this.diffParticles) {
-      // Gaussian distributed random step (Box-Muller)
       const u1 = Math.max(1e-7, Math.random());
       const u2 = Math.random();
       const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
@@ -424,7 +432,6 @@ class MiniSimulators {
       p.x += z0 * stepSize;
       p.y += z1 * stepSize;
 
-      // Closed reflective box boundaries
       if (p.x < p.radius) { p.x = p.radius; }
       if (p.x > w - p.radius) { p.x = w - p.radius; }
       if (p.y < p.radius) { p.y = p.radius; }
@@ -445,7 +452,6 @@ class MiniSimulators {
 
     ctx.clearRect(0, 0, w, h);
 
-    // Medium Tint
     let bgFill = isLight ? 'rgba(241, 245, 249, 0.7)' : 'rgba(15, 23, 42, 0.5)';
     if (this.diffMedium === 'olive_oil') {
       bgFill = isLight ? 'rgba(254, 240, 138, 0.25)' : 'rgba(113, 63, 18, 0.25)';
@@ -455,7 +461,6 @@ class MiniSimulators {
     ctx.fillStyle = bgFill;
     ctx.fillRect(0, 0, w, h);
 
-    // If pulse drop mode, draw expanding RMS diffusion radius: r_rms = sqrt(4 D t)
     if (this.pulseMode) {
       const centerX = w / 2;
       const centerY = h / 2;
@@ -477,7 +482,6 @@ class MiniSimulators {
       ctx.restore();
     }
 
-    // Draw Particles
     const pColor = isLight ? '#0284c7' : '#38bdf8';
     ctx.fillStyle = pColor;
     for (let p of this.diffParticles) {
@@ -488,7 +492,7 @@ class MiniSimulators {
   }
 
   /* =========================================================
-     3. OVERTON SYNTHESIS MODULE: P = (K * D) / d
+     3. OVERTON SYNTHESIS MODULE: P = (K * D_mem) / d
      ========================================================= */
   initSynthesis() {
     this.updateSynthesisUI();
@@ -503,14 +507,21 @@ class MiniSimulators {
 
   updateSynthesisUI() {
     const K = this.targetK;
-    const D_wat = this.computeDcm2s();
-    // Membrane core diffusion hindered by lipid steric crowding
-    const D_mem = (this.diffMedium === 'lipid') ? D_wat : (D_wat * 1.5e-5);
+    let D_mem = 1.48e-10;
+    if (this.mainPhysics) {
+      const dummySpec = Object.assign({}, this.mainPhysics.params.soluteA, {
+        partitionK: K,
+        radiusNm: this.diffRadiusNm,
+        manualRadiusOverride: true
+      });
+      D_mem = this.mainPhysics.computePhysicalDiffusivities(dummySpec, this.diffTempC).dMemCm2s;
+    }
+
     const d_nm = (this.mainPhysics && this.mainPhysics.params.thicknessNm) || 3.9;
     const d_cm = d_nm * 1e-7;
 
     const P = (K * D_mem) / Math.max(1e-8, d_cm);
-    const lagTau = (d_cm * d_cm) / (6 * Math.max(1e-15, D_mem));
+    const lagTau = (d_cm * d_cm) / (6 * Math.max(1e-18, D_mem));
 
     const setTxt = (id, text) => {
       const el = document.getElementById(id);
@@ -521,25 +532,24 @@ class MiniSimulators {
     setTxt('synth-val-d', `${D_mem.toExponential(2)} cm²/s`);
     setTxt('synth-val-thick', `${d_nm.toFixed(1)} nm`);
     setTxt('synth-val-p', `${P.toExponential(2)} cm/s`);
-    setTxt('synth-val-tau', lagTau < 60 ? `${lagTau.toFixed(1)} s` : `${(lagTau / 60).toFixed(1)} min`);
+    setTxt('synth-val-tau', lagTau < 1 ? `${(lagTau * 1000).toFixed(1)} ms` : (lagTau < 60 ? `${lagTau.toFixed(1)} s` : `${(lagTau / 60).toFixed(1)} min`));
   }
 
   applyToMainSimulator() {
     if (!this.mainPhysics) return;
 
-    // Apply mini-sim K and radius to Solute A in main 2D simulator
     this.mainPhysics.params.soluteA.partitionK = this.targetK;
     this.mainPhysics.params.soluteA.radiusNm = this.diffRadiusNm;
     this.mainPhysics.params.soluteA.manualRadiusOverride = true;
     this.mainPhysics.params.tempC = this.diffTempC;
 
     this.mainPhysics.rebuildDiffusionMap();
+    this.mainPhysics.updateConcentrationFromPotential();
     if (this.mainControls) {
       this.mainControls.syncSlidersFromPhysics();
       this.mainControls.updateMetricsUI();
     }
 
-    // Scroll up smoothly to main 2D simulation canvas
     const canvasWrap = document.querySelector('.canvas-wrapper');
     if (canvasWrap) {
       canvasWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });

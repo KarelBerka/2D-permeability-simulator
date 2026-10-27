@@ -1,7 +1,7 @@
 /**
  * charts.js - Enriched Canvas Real-Time Charting Module (Dual Solutes, Dynamic Auto-Scaling & Crystallization)
- * Renders 1D Concentration Profiles C_A(x) & C_B(x), Precipitates C_precip(x), Solubility Limits C_sat,
- * and Permeation Flux Time-Series J_A(t) & J_B(t).
+ * Renders 1D Concentration Profiles C(x) & Chemical Potential u(x), Precipitates C_precip(x), Solubility Limits C_sat,
+ * and Full-History Permeation Accumulation C_rec(t) & Instantaneous Flux J(t).
  */
 
 class ChartEngine {
@@ -13,7 +13,9 @@ class ChartEngine {
     this.fluxCanvas = document.getElementById('flux-chart');
     this.fluxCtx = this.fluxCanvas.getContext('2d');
 
-    this.profileScaleMode = 'auto'; // 'auto' | 'log' | 'fixed'
+    this.profileScaleMode = 'auto'; // 'auto' | 'log'
+    this.profileQuantity = 'C';     // 'C' (Concentration C(x)) | 'u' (Chemical Potential u(x) = C/K)
+    this.fluxPlotMode = 'conc';     // 'conc' (Cumulative C_rec(t)) | 'flux' (Instantaneous Flux J(t) = dC_rec/dt)
   }
 
   update() {
@@ -57,9 +59,9 @@ class ChartEngine {
     } else {
       return {
         isLight: false,
-        textAxis: '#e2e8f0',   // High contrast white-slate
-        textLabel: '#f8fafc',  // Pure crisp white
-        textMuted: '#cbd5e1',  // Legible light gray
+        textAxis: '#e2e8f0',
+        textLabel: '#f8fafc',
+        textMuted: '#cbd5e1',
         gridLine: 'rgba(255, 255, 255, 0.13)',
         memBg: 'rgba(0, 242, 254, 0.10)',
         memBorder: 'rgba(0, 242, 254, 0.45)',
@@ -83,20 +85,21 @@ class ChartEngine {
     ctx.clearRect(0, 0, w, h);
 
     const tc = this.getThemeColors();
+    const isPotentialMode = (this.profileQuantity === 'u');
 
-    const profileA = this.physics.getProfile1D('A');
-    const profileB = this.physics.getProfile1D('B');
-    const precipA = this.physics.getPrecipProfile1D('A');
-    const precipB = this.physics.getPrecipProfile1D('B');
+    const profileA = isPotentialMode ? this.physics.getPotentialProfile1D('A') : this.physics.getProfile1D('A');
+    const profileB = isPotentialMode ? this.physics.getPotentialProfile1D('B') : this.physics.getProfile1D('B');
+    const precipA = isPotentialMode ? null : this.physics.getPrecipProfile1D('A');
+    const precipB = isPotentialMode ? null : this.physics.getPrecipProfile1D('B');
 
     const nx = this.physics.nx;
     const { memStart, memEnd, viewSolute, params } = this.physics;
-    const isCryst = (params.regime === 'crystallization');
+    const isCryst = (params.regime === 'crystallization') && !isPotentialMode;
 
     const satA = params.soluteA.solubilityLimit || 1.2;
     const satB = params.soluteB.solubilityLimit || 0.6;
 
-    const padL = 46;
+    const padL = 48;
     const padR = 16;
     const padT = 38;
     const padB = 28;
@@ -107,8 +110,8 @@ class ChartEngine {
     // Calculate maximum concentration based on active view mode (including precipitate fraction)
     let maxValA = 0.01, maxValB = 0.01;
     for (let x = 0; x < nx; x++) {
-      const totA = profileA[x] + (isCryst ? precipA[x] : 0);
-      const totB = profileB[x] + (isCryst ? precipB[x] : 0);
+      const totA = profileA[x] + (isCryst && precipA ? precipA[x] : 0);
+      const totB = profileB[x] + (isCryst && precipB ? precipB[x] : 0);
       if (totA > maxValA) maxValA = totA;
       if (totB > maxValB) maxValB = totB;
     }
@@ -123,7 +126,7 @@ class ChartEngine {
       else if (viewSolute === 'B') maxY = Math.max(0.1, Math.ceil(maxValB * 1.15 * 20) / 20);
       else maxY = Math.max(0.1, Math.ceil(Math.max(maxValA, maxValB) * 1.15 * 20) / 20);
     } else if (this.profileScaleMode === 'log') {
-      maxY = 1.0; // Log scale maps log10(C) from -3.0 to +0.6
+      maxY = 1.0; // Log scale maps log10(C) from -3.0 to +0.8
     }
 
     // Background grid & Y-axis labels
@@ -144,7 +147,7 @@ class ChartEngine {
       ctx.textAlign = 'right';
 
       if (this.profileScaleMode === 'log') {
-        const logVal = -3.0 + frac * 3.6;
+        const logVal = -3.0 + frac * 3.8;
         ctx.fillText(logVal.toFixed(1), padL - 6, yPos + 4);
       } else {
         const v = frac * maxY;
@@ -175,7 +178,10 @@ class ChartEngine {
     ctx.font = '500 10px JetBrains Mono, monospace';
     ctx.fillStyle = tc.textMuted;
     ctx.textAlign = 'left';
-    ctx.fillText(this.profileScaleMode === 'log' ? 'Conc (log₁₀)' : 'C(x) [mM]', padL, 30);
+    const unitLabel = isPotentialMode
+      ? (this.profileScaleMode === 'log' ? 'u(x) (log₁₀)' : 'u(x)=C/K [mM]')
+      : (this.profileScaleMode === 'log' ? 'C(x) (log₁₀)' : 'C(x) [mM]');
+    ctx.fillText(unitLabel, padL, 30);
 
     // Solute Legend
     ctx.font = '600 11px Inter, sans-serif';
@@ -222,7 +228,7 @@ class ChartEngine {
     // Helper to draw profile curves (both free monomer and precipitate solid fraction)
     const drawCurveAndPrecip = (freeProfile, precipProfile, color, fillColor, precipColor) => {
       // 1. Draw solid crystal precipitate layer (if any)
-      if (isCryst && precipProfile) {
+      if (isCryst && precipProfile && this.profileScaleMode !== 'log') {
         ctx.save();
         ctx.fillStyle = precipColor;
         ctx.beginPath();
@@ -245,7 +251,7 @@ class ChartEngine {
         ctx.restore();
       }
 
-      // 2. Draw free dissolved concentration line
+      // 2. Draw free dissolved concentration (or chemical potential) line
       ctx.save();
       ctx.strokeStyle = color;
       ctx.lineWidth = 2.5;
@@ -258,7 +264,7 @@ class ChartEngine {
         let normVal = 0;
         if (this.profileScaleMode === 'log') {
           const logVal = Math.log10(Math.max(1e-3, val));
-          normVal = Math.max(0, Math.min(1.0, (logVal - (-3.0)) / 3.6));
+          normVal = Math.max(0, Math.min(1.0, (logVal - (-3.0)) / 3.8));
         } else {
           normVal = Math.min(1.0, val / maxY);
         }
@@ -300,8 +306,11 @@ class ChartEngine {
 
     const tc = this.getThemeColors();
     const { timeHistory, fluxHistory, viewSolute } = this.physics;
+    const isFluxRateMode = (this.fluxPlotMode === 'flux');
+    const keyA = isFluxRateMode ? 'fluxA' : 'concA';
+    const keyB = isFluxRateMode ? 'fluxB' : 'concB';
 
-    const padL = 46;
+    const padL = 52;
     const padR = 16;
     const padT = 38;
     const padB = 28;
@@ -323,17 +332,20 @@ class ChartEngine {
       return;
     }
 
-    // Dynamic Auto-Scaling for Receiver Accumulation Concentration
-    let maxConcA = 0.01, maxConcB = 0.01;
+    // Dynamic Auto-Scaling across entire cumulative time history from t = 0
+    let maxValA = 1e-4, maxValB = 1e-4;
     for (let i = 0; i < fluxHistory.length; i++) {
-      if (fluxHistory[i].concA > maxConcA) maxConcA = fluxHistory[i].concA;
-      if (fluxHistory[i].concB > maxConcB) maxConcB = fluxHistory[i].concB;
+      const vA = fluxHistory[i][keyA] || 0;
+      const vB = fluxHistory[i][keyB] || 0;
+      if (vA > maxValA) maxValA = vA;
+      if (vB > maxValB) maxValB = vB;
     }
 
-    let maxFluxY = 0.1;
-    if (viewSolute === 'A') maxFluxY = Math.max(0.01, Math.ceil(maxConcA * 1.25 * 100) / 100);
-    else if (viewSolute === 'B') maxFluxY = Math.max(0.01, Math.ceil(maxConcB * 1.25 * 100) / 100);
-    else maxFluxY = Math.max(0.01, Math.ceil(Math.max(maxConcA, maxConcB) * 1.25 * 100) / 100);
+    let rawMax = maxValA;
+    if (viewSolute === 'B') rawMax = maxValB;
+    else if (viewSolute === 'both') rawMax = Math.max(maxValA, maxValB);
+
+    const maxFluxY = Math.max(1e-4, rawMax * 1.2);
 
     // Grid lines & Y-axis labels
     ctx.strokeStyle = tc.gridLine;
@@ -349,23 +361,24 @@ class ChartEngine {
       ctx.lineTo(w - padR, yPos);
       ctx.stroke();
 
-      ctx.font = '500 11px JetBrains Mono, monospace';
+      ctx.font = '500 10px JetBrains Mono, monospace';
       ctx.fillStyle = tc.textAxis;
       ctx.textAlign = 'right';
-      ctx.fillText(v < 0.1 ? v.toFixed(3) : v.toFixed(2), padL - 6, yPos + 4);
+      const labelStr = v === 0 ? '0' : (v < 0.01 ? v.toExponential(1) : (v < 0.1 ? v.toFixed(3) : v.toFixed(2)));
+      ctx.fillText(labelStr, padL - 6, yPos + 4);
     }
 
     // Row 1: Header title
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = tc.accent;
     ctx.textAlign = 'left';
-    ctx.fillText('Receiver Chamber Accumulation', padL, 14);
+    ctx.fillText(isFluxRateMode ? 'Instantaneous Permeation Flux J(t)' : 'Receiver Chamber Accumulation C_rec(t)', padL, 14);
 
     // Row 2: Concentration Axis Unit (left) & Solute Legend (right)
     ctx.font = '500 10px JetBrains Mono, monospace';
     ctx.fillStyle = tc.textMuted;
     ctx.textAlign = 'left';
-    ctx.fillText('C_receiver(t) [mM]', padL, 30);
+    ctx.fillText(isFluxRateMode ? 'J(t) = dC/dt [mM/s]' : 'C_receiver(t) [mM]', padL, 30);
 
     // Legend Indicators
     ctx.font = '600 11px Inter, sans-serif';
@@ -379,9 +392,10 @@ class ChartEngine {
       ctx.fillText('\u25A0 Solute B', w - padR, 30);
     }
 
-    const latestTime = timeHistory[timeHistory.length - 1] || 1.0;
-    const timeSpan = Math.max(5.0, Math.min(60.0, latestTime));
-    const startTime = Math.max(0, latestTime - timeSpan);
+    // Full history from t = 0 to latestTime so early lag phase and spring burst are always visible
+    const latestTime = Math.max(1.0, timeHistory[timeHistory.length - 1] || 1.0);
+    const timeSpan = Math.max(5.0, latestTime);
+    const startTime = 0.0;
 
     const drawFluxSeries = (key, color, fillColor) => {
       ctx.save();
@@ -391,13 +405,14 @@ class ChartEngine {
 
       const n = fluxHistory.length;
       let startedPlot = false;
+      let lastPx = padL;
       for (let i = 0; i < n; i++) {
         const tVal = timeHistory[i];
-        if (tVal < startTime) continue;
         const px = padL + ((tVal - startTime) / timeSpan) * plotW;
         const val = fluxHistory[i][key] || 0;
         const normVal = Math.min(1.0, val / maxFluxY);
         const py = padT + plotH * (1.0 - normVal);
+        lastPx = px;
 
         if (!startedPlot) {
           ctx.moveTo(px, py);
@@ -408,7 +423,7 @@ class ChartEngine {
       }
       if (startedPlot) ctx.stroke();
 
-      ctx.lineTo(padL + plotW, padT + plotH);
+      ctx.lineTo(lastPx, padT + plotH);
       ctx.lineTo(padL, padT + plotH);
       ctx.closePath();
       ctx.fillStyle = fillColor;
@@ -417,13 +432,13 @@ class ChartEngine {
     };
 
     if (viewSolute === 'A' || viewSolute === 'both') {
-      drawFluxSeries('concA', tc.soluteA, tc.soluteAFill);
+      drawFluxSeries(keyA, tc.soluteA, tc.soluteAFill);
     }
     if (viewSolute === 'B' || viewSolute === 'both') {
-      drawFluxSeries('concB', tc.soluteB, tc.soluteBFill);
+      drawFluxSeries(keyB, tc.soluteB, tc.soluteBFill);
     }
 
-    // X-axis Time Ticks
+    // X-axis Time Ticks from 0 to timeSpan
     const numTicks = 5;
     ctx.font = '500 10px JetBrains Mono, monospace';
     ctx.fillStyle = tc.textAxis;
@@ -446,6 +461,6 @@ class ChartEngine {
     ctx.font = '600 11px Inter, sans-serif';
     ctx.fillStyle = tc.accent;
     ctx.textAlign = 'center';
-    ctx.fillText(`Simulation Time: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 3);
+    ctx.fillText(`Total Time: ${this.formatTimeScale(latestTime, latestTime)}`, padL + plotW / 2, h - 3);
   }
 }

@@ -1,6 +1,7 @@
 /**
  * controls.js - Dynamic UI Control Manager for Dual-Solute 2D Permeability Simulator
- * Handles Solute A & B, Interaction Sliders, View Modes, Regime Switch, and Crystallization Metrics.
+ * Handles Solute A & B, Shape & Aspect Ratio, Lipid Presets, Interaction Sliders,
+ * View Modes, Regime Switch, Persistent Paint Tools, CSV Data Export, and Crystallization Metrics.
  */
 
 class ControlsManager {
@@ -11,6 +12,7 @@ class ControlsManager {
 
     this.isMouseDown = false;
     this.activePaintTool = 'source'; // 'source', 'sink', 'erase'
+    this.paintTarget = 'both';       // 'both', 'A', 'B'
 
     this.initEventListeners();
     this.updateMetricsUI();
@@ -27,10 +29,8 @@ class ControlsManager {
       if (regimeMode === 'infinite_dilution' && btnRegimeDilute) btnRegimeDilute.classList.add('active');
       else if (btnRegimeCryst) btnRegimeCryst.classList.add('active');
 
-      if (regimeMode === 'infinite_dilution') {
-        this.physics.C_precip_A.fill(0);
-        this.physics.C_precip_B.fill(0);
-      }
+      // Apply crystallization/dissolution transition conserving total solute mass
+      this.physics.applyCrystallizationKinetics(0.1);
       this.physics.rebuildDiffusionMap();
       this.updateMetricsUI();
     };
@@ -55,6 +55,14 @@ class ControlsManager {
         const currentPreset = presetSelect ? presetSelect.value : 'default';
         this.physics.resetScenario(currentPreset);
         this.updateMetricsUI();
+      });
+    }
+
+    // Export CSV button
+    const btnExportCsv = document.getElementById('btn-export-csv');
+    if (btnExportCsv) {
+      btnExportCsv.addEventListener('click', () => {
+        this.exportSimulationCSV();
       });
     }
 
@@ -106,26 +114,30 @@ class ControlsManager {
 
     // Preset Solute Selection for Solute A and Solute B
     const solutePresets = {
-      ibuprofen:    { name: 'Ibuprofen', mw: 206, radius: 0.45, partitionK: 3.05, hydration: 0.20, affinity: 0.85, sat: 1.20 },
-      caffeine:     { name: 'Caffeine', mw: 194, radius: 0.38, partitionK: 0.15, hydration: 0.65, affinity: 0.15, sat: 0.60 },
-      water:        { name: 'Water', mw: 18, radius: 0.15, partitionK: 0.20, hydration: 0.90, affinity: 0.05, sat: 3.00 },
-      ion:          { name: 'Ion Na⁺/Cl⁻', mw: 30, radius: 0.25, partitionK: 0.05, hydration: 0.95, affinity: 0.01, sat: 4.00 },
-      small_organic:{ name: 'Small Organic', mw: 100, radius: 0.40, partitionK: 0.80, hydration: 0.40, affinity: 0.40, sat: 1.50 },
-      macrocycle:   { name: 'Macrocycle', mw: 1000, radius: 1.20, partitionK: 2.20, hydration: 0.30, affinity: 0.70, sat: 0.50 },
-      biopolymer:   { name: 'Biopolymer', mw: 3000, radius: 2.00, partitionK: 0.10, hydration: 0.80, affinity: 0.10, sat: 0.20 }
+      ibuprofen:     { name: 'Ibuprofen', mw: 206, shape: 'disc', aspect: 2.4, partitionK: 3.05, hydration: 0.20, affinity: 0.85, sat: 1.20 },
+      caffeine:      { name: 'Caffeine', mw: 194, shape: 'sphere', aspect: 1.0, partitionK: 0.15, hydration: 0.65, affinity: 0.15, sat: 0.60 },
+      water:         { name: 'Water', mw: 18, shape: 'sphere', aspect: 1.0, partitionK: 0.20, hydration: 0.90, affinity: 0.05, sat: 3.00 },
+      ion:           { name: 'Ion Na⁺/Cl⁻', mw: 30, shape: 'sphere', aspect: 1.0, partitionK: 0.05, hydration: 0.95, affinity: 0.01, sat: 4.00 },
+      small_organic: { name: 'Small Organic', mw: 100, shape: 'rod', aspect: 1.8, partitionK: 0.80, hydration: 0.40, affinity: 0.40, sat: 1.50 },
+      macrocycle:    { name: 'Macrocycle', mw: 1000, shape: 'disc', aspect: 3.0, partitionK: 2.20, hydration: 0.30, affinity: 0.70, sat: 0.50 },
+      biopolymer:    { name: 'Biopolymer', mw: 3000, shape: 'rod', aspect: 4.0, partitionK: 0.10, hydration: 0.80, affinity: 0.10, sat: 0.20 }
     };
 
     const applySolutePreset = (soluteKey, presetObj) => {
       const spec = (soluteKey === 'A') ? this.physics.params.soluteA : this.physics.params.soluteB;
       spec.name = presetObj.name;
       spec.mwDa = presetObj.mw;
-      spec.radiusNm = presetObj.radius;
+      spec.soluteShape = presetObj.shape || 'sphere';
+      spec.aspectRatio = presetObj.aspect || 1.0;
+      spec.manualRadiusOverride = false;
       spec.partitionK = presetObj.partitionK;
       spec.hydration = presetObj.hydration;
       spec.membraneAffinity = presetObj.affinity;
       if (presetObj.sat) spec.solubilityLimit = presetObj.sat;
+      spec.radiusNm = this.physics.computeHydrodynamicRadius(spec);
 
       this.physics.rebuildDiffusionMap();
+      this.physics.updateConcentrationFromPotential();
       this.syncSlidersFromPhysics();
       this.updateMetricsUI();
     };
@@ -168,6 +180,7 @@ class ControlsManager {
     this.bindSlider('slider-soluteA-partition', 'val-soluteA-partition', (v) => {
       this.physics.params.soluteA.partitionK = parseFloat(v);
       this.physics.rebuildDiffusionMap();
+      this.physics.updateConcentrationFromPotential();
     });
 
     this.bindSlider('slider-soluteA-radius', 'val-soluteA-radius', (v) => {
@@ -176,9 +189,44 @@ class ControlsManager {
       this.physics.rebuildDiffusionMap();
     }, (v) => `${parseFloat(v).toFixed(2)} nm`);
 
+    // Solute A Shape & Aspect Ratio
+    const selShapeA = document.getElementById('select-soluteA-shape');
+    if (selShapeA) {
+      selShapeA.addEventListener('change', (e) => {
+        const sA = this.physics.params.soluteA;
+        sA.soluteShape = e.target.value;
+        if (sA.soluteShape === 'sphere') sA.aspectRatio = 1.0;
+        else if (sA.aspectRatio < 1.2) sA.aspectRatio = 2.0;
+        sA.manualRadiusOverride = false;
+        sA.radiusNm = this.physics.computeHydrodynamicRadius(sA);
+        this.physics.rebuildDiffusionMap();
+        this.syncSlidersFromPhysics();
+        this.updateMetricsUI();
+      });
+    }
+
+    this.bindSlider('slider-soluteA-aspect', 'val-soluteA-aspect', (v) => {
+      const sA = this.physics.params.soluteA;
+      sA.aspectRatio = parseFloat(v);
+      if (sA.aspectRatio > 1.05 && sA.soluteShape === 'sphere') {
+        sA.soluteShape = 'disc';
+        if (selShapeA) selShapeA.value = 'disc';
+      }
+      sA.manualRadiusOverride = false;
+      sA.radiusNm = this.physics.computeHydrodynamicRadius(sA);
+      this.physics.rebuildDiffusionMap();
+      this.syncSlidersFromPhysics();
+    }, (v) => {
+      const shapeName = this.formatShapeLabel(this.physics.params.soluteA.soluteShape);
+      return `${shapeName} (p=${parseFloat(v).toFixed(1)})`;
+    });
+
     this.bindSlider('slider-soluteA-hydration', 'val-soluteA-hydration', (v) => {
       this.physics.params.soluteA.hydration = parseFloat(v);
+      this.physics.params.soluteA.manualRadiusOverride = false;
+      this.physics.params.soluteA.radiusNm = this.physics.computeHydrodynamicRadius(this.physics.params.soluteA);
       this.physics.rebuildDiffusionMap();
+      this.syncSlidersFromPhysics();
     });
 
     this.bindSlider('slider-soluteA-affinity', 'val-soluteA-affinity', (v) => {
@@ -208,6 +256,7 @@ class ControlsManager {
     this.bindSlider('slider-soluteB-partition', 'val-soluteB-partition', (v) => {
       this.physics.params.soluteB.partitionK = parseFloat(v);
       this.physics.rebuildDiffusionMap();
+      this.physics.updateConcentrationFromPotential();
     });
 
     this.bindSlider('slider-soluteB-radius', 'val-soluteB-radius', (v) => {
@@ -216,9 +265,44 @@ class ControlsManager {
       this.physics.rebuildDiffusionMap();
     }, (v) => `${parseFloat(v).toFixed(2)} nm`);
 
+    // Solute B Shape & Aspect Ratio
+    const selShapeB = document.getElementById('select-soluteB-shape');
+    if (selShapeB) {
+      selShapeB.addEventListener('change', (e) => {
+        const sB = this.physics.params.soluteB;
+        sB.soluteShape = e.target.value;
+        if (sB.soluteShape === 'sphere') sB.aspectRatio = 1.0;
+        else if (sB.aspectRatio < 1.2) sB.aspectRatio = 2.0;
+        sB.manualRadiusOverride = false;
+        sB.radiusNm = this.physics.computeHydrodynamicRadius(sB);
+        this.physics.rebuildDiffusionMap();
+        this.syncSlidersFromPhysics();
+        this.updateMetricsUI();
+      });
+    }
+
+    this.bindSlider('slider-soluteB-aspect', 'val-soluteB-aspect', (v) => {
+      const sB = this.physics.params.soluteB;
+      sB.aspectRatio = parseFloat(v);
+      if (sB.aspectRatio > 1.05 && sB.soluteShape === 'sphere') {
+        sB.soluteShape = 'disc';
+        if (selShapeB) selShapeB.value = 'disc';
+      }
+      sB.manualRadiusOverride = false;
+      sB.radiusNm = this.physics.computeHydrodynamicRadius(sB);
+      this.physics.rebuildDiffusionMap();
+      this.syncSlidersFromPhysics();
+    }, (v) => {
+      const shapeName = this.formatShapeLabel(this.physics.params.soluteB.soluteShape);
+      return `${shapeName} (p=${parseFloat(v).toFixed(1)})`;
+    });
+
     this.bindSlider('slider-soluteB-hydration', 'val-soluteB-hydration', (v) => {
       this.physics.params.soluteB.hydration = parseFloat(v);
+      this.physics.params.soluteB.manualRadiusOverride = false;
+      this.physics.params.soluteB.radiusNm = this.physics.computeHydrodynamicRadius(this.physics.params.soluteB);
       this.physics.rebuildDiffusionMap();
+      this.syncSlidersFromPhysics();
     });
 
     this.bindSlider('slider-soluteB-affinity', 'val-soluteB-affinity', (v) => {
@@ -230,12 +314,41 @@ class ControlsManager {
     this.bindSlider('slider-interact-AB', 'val-interact-AB', (v) => {
       const val = parseFloat(v);
       this.physics.params.interactAB = val;
+      this.physics.rebuildDiffusionMap();
     }, (v) => {
       const val = parseFloat(v);
       if (val < -0.05) return `${val.toFixed(2)} (Attraction)`;
       if (val > 0.05) return `${val.toFixed(2)} (Crowding)`;
       return `0.00 (Independent)`;
     });
+
+    // Lipid Membrane Composition Presets (#select-lipid-preset)
+    const lipidPresets = {
+      popc:          { order: 0.60, fluidity: 0.55, thicknessNm: 3.9, tempC: 37.0 },
+      popc_chol:     { order: 0.80, fluidity: 0.38, thicknessNm: 4.4, tempC: 37.0 },
+      dppc_gel:      { order: 0.90, fluidity: 0.15, thicknessNm: 4.8, tempC: 25.0 },
+      ecoli:         { order: 0.52, fluidity: 0.62, thicknessNm: 3.7, tempC: 37.0 },
+      sphingomyelin: { order: 0.85, fluidity: 0.28, thicknessNm: 6.0, tempC: 37.0 }
+    };
+
+    const selLipid = document.getElementById('select-lipid-preset');
+    if (selLipid) {
+      selLipid.addEventListener('change', (e) => {
+        const key = e.target.value;
+        const lp = lipidPresets[key] || lipidPresets.popc;
+        this.physics.params.lipidPreset = key;
+        this.physics.params.order = lp.order;
+        this.physics.params.fluidity = lp.fluidity;
+        this.physics.params.thicknessNm = lp.thicknessNm;
+        this.physics.params.tempC = lp.tempC;
+
+        this.physics.updateMembraneGeometry();
+        this.physics.rebuildDiffusionMap();
+        this.physics.updateConcentrationFromPotential();
+        this.syncSlidersFromPhysics();
+        this.updateMetricsUI();
+      });
+    }
 
     // Temperature Control Slider
     this.bindSlider('slider-temp', 'val-temp', (val) => {
@@ -258,6 +371,7 @@ class ControlsManager {
       this.physics.params.thicknessNm = parseFloat(val);
       this.physics.updateMembraneGeometry();
       this.physics.rebuildDiffusionMap();
+      this.physics.updateConcentrationFromPotential();
     }, (val) => `${parseFloat(val).toFixed(1)} nm`);
 
     // Channel Pore Checkbox
@@ -266,6 +380,7 @@ class ControlsManager {
       chkChannel.addEventListener('change', (e) => {
         this.physics.params.hasChannel = e.target.checked;
         this.physics.rebuildDiffusionMap();
+        this.physics.updateConcentrationFromPotential();
         this.updateMetricsUI();
       });
     }
@@ -316,6 +431,13 @@ class ControlsManager {
         this.activePaintTool = btn.dataset.tool;
       });
     });
+
+    const selectPaintTarget = document.getElementById('select-paint-target');
+    if (selectPaintTarget) {
+      selectPaintTarget.addEventListener('change', (e) => {
+        this.paintTarget = e.target.value;
+      });
+    }
 
     // Canvas Painting Interaction
     const canvas = this.render.canvas;
@@ -385,6 +507,24 @@ class ControlsManager {
       });
     }
 
+    // 1D Profile Quantity Toggle: Concentration C(x) vs Chemical Potential u(x)
+    const btnToggleQuantity = document.getElementById('btn-toggle-profile-quantity');
+    const labelToggleQuantity = document.getElementById('profile-quantity-label');
+    if (btnToggleQuantity) {
+      btnToggleQuantity.addEventListener('click', () => {
+        if (this.charts.profileQuantity === 'C') {
+          this.charts.profileQuantity = 'u';
+          btnToggleQuantity.classList.add('active');
+          if (labelToggleQuantity) labelToggleQuantity.textContent = 'Plot: u(x)=C/K';
+        } else {
+          this.charts.profileQuantity = 'C';
+          btnToggleQuantity.classList.remove('active');
+          if (labelToggleQuantity) labelToggleQuantity.textContent = 'Plot: C(x)';
+        }
+        this.charts.update();
+      });
+    }
+
     // 1D Profile Scale Toggle (Auto-Fit vs Log10)
     const btnToggleScale = document.getElementById('btn-toggle-profile-scale');
     const labelToggleScale = document.getElementById('profile-scale-label');
@@ -399,11 +539,36 @@ class ControlsManager {
           btnToggleScale.classList.remove('active');
           if (labelToggleScale) labelToggleScale.textContent = 'Auto-Fit Y';
         }
+        this.charts.update();
+      });
+    }
+
+    // Permeation Accumulation Mode Toggle: C_rec(t) vs Instantaneous Flux J(t) = dC/dt
+    const btnToggleFluxMode = document.getElementById('btn-toggle-flux-mode');
+    const labelToggleFluxMode = document.getElementById('flux-mode-label');
+    if (btnToggleFluxMode) {
+      btnToggleFluxMode.addEventListener('click', () => {
+        if (this.charts.fluxPlotMode === 'conc') {
+          this.charts.fluxPlotMode = 'flux';
+          btnToggleFluxMode.classList.add('active');
+          if (labelToggleFluxMode) labelToggleFluxMode.textContent = 'Mode: Flux J(t)';
+        } else {
+          this.charts.fluxPlotMode = 'conc';
+          btnToggleFluxMode.classList.remove('active');
+          if (labelToggleFluxMode) labelToggleFluxMode.textContent = 'Mode: C_rec(t)';
+        }
+        this.charts.update();
       });
     }
 
     this.syncSlidersFromPhysics();
     this.updateMetricsUI();
+  }
+
+  formatShapeLabel(shape) {
+    if (shape === 'disc') return 'Disc';
+    if (shape === 'rod') return 'Rod';
+    return 'Sphere';
   }
 
   bindSlider(sliderId, badgeId, onChange, formatFn = (val) => parseFloat(val).toFixed(2)) {
@@ -431,8 +596,53 @@ class ControlsManager {
     const gridX = Math.floor(clickX * scaleX);
     const gridY = Math.floor(clickY * scaleY);
 
-    const soluteTarget = (this.physics.viewSolute === 'B') ? 'B' : 'A';
-    this.physics.paintSolute(gridX, gridY, 5, this.activePaintTool, soluteTarget);
+    let soluteTarget = this.paintTarget || 'both';
+    if (this.physics.viewSolute === 'A' && soluteTarget === 'both') soluteTarget = 'A';
+    if (this.physics.viewSolute === 'B' && soluteTarget === 'both') soluteTarget = 'B';
+
+    this.physics.paintSolute(gridX, gridY, 4, this.activePaintTool, soluteTarget);
+  }
+
+  exportSimulationCSV() {
+    const p = this.physics;
+    const nx = p.nx;
+    const cA = p.getProfile1D('A');
+    const uA = p.getPotentialProfile1D('A');
+    const pA = p.getPrecipProfile1D('A');
+
+    const cB = p.getProfile1D('B');
+    const uB = p.getPotentialProfile1D('B');
+    const pB = p.getPrecipProfile1D('B');
+
+    let csv = '# 2D Membrane Permeability Simulator - Data Export\n';
+    csv += `# Simulation Time (s):,${p.time.toFixed(3)},Regime:,${p.params.regime},Temperature (C):,${p.params.tempC}\n`;
+    csv += `# Solute A:,${p.params.soluteA.name},K_A=,${p.params.soluteA.partitionK},C_sat_A=,${p.params.soluteA.solubilityLimit}\n`;
+    csv += `# Solute B:,${p.params.soluteB.name},K_B=,${p.params.soluteB.partitionK},C_sat_B=,${p.params.soluteB.solubilityLimit}\n\n`;
+
+    csv += '# PART 1: 1D SPATIAL PROFILE ACROSS MEMBRANE AXIS (x)\n';
+    csv += 'Grid_X,Region,C_free_A (mM),u_A (mM),C_precip_A (mM),C_free_B (mM),u_B (mM),C_precip_B (mM)\n';
+    for (let x = 0; x < nx; x++) {
+      const region = (x < p.memStart) ? 'Donor' : (x < p.memEnd ? 'Membrane' : 'Receiver');
+      csv += `${x},${region},${cA[x].toFixed(5)},${uA[x].toFixed(5)},${pA[x].toFixed(5)},${cB[x].toFixed(5)},${uB[x].toFixed(5)},${pB[x].toFixed(5)}\n`;
+    }
+
+    csv += '\n# PART 2: RECEIVER ACCUMULATION & FLUX TIME-SERIES\n';
+    csv += 'Time (s),C_receiver_A (mM),Flux_J_A (mM/s),C_receiver_B (mM),Flux_J_B (mM/s)\n';
+    for (let i = 0; i < p.timeHistory.length; i++) {
+      const t = p.timeHistory[i];
+      const fh = p.fluxHistory[i];
+      csv += `${t.toFixed(3)},${(fh.concA || 0).toFixed(6)},${(fh.fluxA || 0).toFixed(6)},${(fh.concB || 0).toFixed(6)},${(fh.fluxB || 0).toFixed(6)}\n`;
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `membrane_permeability_t${Math.round(p.time)}s.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   syncSlidersFromPhysics() {
@@ -447,30 +657,48 @@ class ControlsManager {
       if (badge) badge.textContent = formatted;
     };
 
+    const mwBadgeA = document.getElementById('val-soluteA-mw');
+    if (mwBadgeA) mwBadgeA.textContent = `${sA.mwDa || 206} Da`;
+    const mwBadgeB = document.getElementById('val-soluteB-mw');
+    if (mwBadgeB) mwBadgeB.textContent = `${sB.mwDa || 194} Da`;
+
     // Solute A sliders
     setVal('slider-soluteA-conc', 'val-soluteA-conc', sA.initialConc, `${sA.initialConc.toFixed(1)} mM`);
     setVal('slider-soluteA-sat', 'val-soluteA-sat', sA.solubilityLimit || 1.2, `${(sA.solubilityLimit || 1.2).toFixed(2)} mM`);
-    setVal('slider-soluteA-crystrate', 'val-soluteA-crystrate', sA.crystRate || 0.15, `${(sA.crystRate || 0.15).toFixed(2)} s⁻¹`);
-    setVal('slider-soluteA-fouling', 'val-soluteA-fouling', sA.foulingFactor || 0.6, (sA.foulingFactor || 0.6).toFixed(2));
+    setVal('slider-soluteA-crystrate', 'val-soluteA-crystrate', sA.crystRate !== undefined ? sA.crystRate : 0.15, `${(sA.crystRate !== undefined ? sA.crystRate : 0.15).toFixed(2)} s⁻¹`);
+    setVal('slider-soluteA-fouling', 'val-soluteA-fouling', sA.foulingFactor !== undefined ? sA.foulingFactor : 0.6, (sA.foulingFactor !== undefined ? sA.foulingFactor : 0.6).toFixed(2));
     setVal('slider-soluteA-partition', 'val-soluteA-partition', sA.partitionK, sA.partitionK.toFixed(2));
     setVal('slider-soluteA-radius', 'val-soluteA-radius', sA.radiusNm, `${sA.radiusNm.toFixed(2)} nm`);
+    setVal('slider-soluteA-aspect', 'val-soluteA-aspect', sA.aspectRatio || 1.0, `${this.formatShapeLabel(sA.soluteShape)} (p=${(sA.aspectRatio || 1.0).toFixed(1)})`);
     setVal('slider-soluteA-hydration', 'val-soluteA-hydration', sA.hydration || 0, (sA.hydration || 0).toFixed(2));
     setVal('slider-soluteA-affinity', 'val-soluteA-affinity', sA.membraneAffinity || 0.5, (sA.membraneAffinity || 0.5).toFixed(2));
+
+    const selShapeA = document.getElementById('select-soluteA-shape');
+    if (selShapeA) selShapeA.value = sA.soluteShape || 'sphere';
 
     // Solute B sliders
     setVal('slider-soluteB-conc', 'val-soluteB-conc', sB.initialConc, `${sB.initialConc.toFixed(1)} mM`);
     setVal('slider-soluteB-sat', 'val-soluteB-sat', sB.solubilityLimit || 0.6, `${(sB.solubilityLimit || 0.6).toFixed(2)} mM`);
-    setVal('slider-soluteB-crystrate', 'val-soluteB-crystrate', sB.crystRate || 0.12, `${(sB.crystRate || 0.12).toFixed(2)} s⁻¹`);
-    setVal('slider-soluteB-fouling', 'val-soluteB-fouling', sB.foulingFactor || 0.4, (sB.foulingFactor || 0.4).toFixed(2));
+    setVal('slider-soluteB-crystrate', 'val-soluteB-crystrate', sB.crystRate !== undefined ? sB.crystRate : 0.12, `${(sB.crystRate !== undefined ? sB.crystRate : 0.12).toFixed(2)} s⁻¹`);
+    setVal('slider-soluteB-fouling', 'val-soluteB-fouling', sB.foulingFactor !== undefined ? sB.foulingFactor : 0.4, (sB.foulingFactor !== undefined ? sB.foulingFactor : 0.4).toFixed(2));
     setVal('slider-soluteB-partition', 'val-soluteB-partition', sB.partitionK, sB.partitionK.toFixed(2));
     setVal('slider-soluteB-radius', 'val-soluteB-radius', sB.radiusNm, `${sB.radiusNm.toFixed(2)} nm`);
+    setVal('slider-soluteB-aspect', 'val-soluteB-aspect', sB.aspectRatio || 1.0, `${this.formatShapeLabel(sB.soluteShape)} (p=${(sB.aspectRatio || 1.0).toFixed(1)})`);
     setVal('slider-soluteB-hydration', 'val-soluteB-hydration', sB.hydration || 0, (sB.hydration || 0).toFixed(2));
     setVal('slider-soluteB-affinity', 'val-soluteB-affinity', sB.membraneAffinity || 0.5, (sB.membraneAffinity || 0.5).toFixed(2));
 
+    const selShapeB = document.getElementById('select-soluteB-shape');
+    if (selShapeB) selShapeB.value = sB.soluteShape || 'sphere';
+
     // Interaction slider
-    setVal('slider-interact-AB', 'val-interact-AB', p.interactAB || 0, (p.interactAB || 0).toFixed(2));
+    const chi = p.interactAB || 0;
+    const chiLabel = chi < -0.05 ? `${chi.toFixed(2)} (Attraction)` : (chi > 0.05 ? `${chi.toFixed(2)} (Crowding)` : '0.00 (Independent)');
+    setVal('slider-interact-AB', 'val-interact-AB', chi, chiLabel);
 
     // Membrane sliders
+    const selLipid = document.getElementById('select-lipid-preset');
+    if (selLipid && p.lipidPreset) selLipid.value = p.lipidPreset;
+
     setVal('slider-temp', 'val-temp', p.tempC || 37.0, `${(p.tempC || 37.0).toFixed(1)} \u00B0C`);
     setVal('slider-order', 'val-order', p.order, p.order.toFixed(2));
     setVal('slider-fluidity', 'val-fluidity', p.fluidity, p.fluidity.toFixed(2));

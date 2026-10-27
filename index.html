@@ -72,6 +72,10 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           GitHub
         </a>
+        <button id="btn-export-csv" class="btn btn-secondary" title="Export 1D Profile and Time-Series Accumulation Data as CSV">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
         <button id="btn-reset" class="btn btn-secondary">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
           Reset
@@ -118,15 +122,20 @@
             <!-- Paint tools -->
             <div class="tool-group">
               <span class="tool-label">Paint Tool:</span>
-              <button id="tool-source" class="btn-tool active" title="Add Solute Source" data-tool="source">
+              <button id="tool-source" class="btn-tool active" title="Add Persistent Solute Source" data-tool="source">
                 <span class="tool-dot source"></span> Source
               </button>
-              <button id="tool-sink" class="btn-tool" title="Add Concentration Sink" data-tool="sink">
+              <button id="tool-sink" class="btn-tool" title="Add Persistent Concentration Sink" data-tool="sink">
                 <span class="tool-dot sink"></span> Sink
               </button>
-              <button id="tool-erase" class="btn-tool" title="Clear Region" data-tool="erase">
+              <button id="tool-erase" class="btn-tool" title="Clear Source/Sink &amp; Region" data-tool="erase">
                 <span class="tool-dot erase"></span> Erase
               </button>
+              <select id="select-paint-target" class="paint-target-select" title="Choose which solute to paint">
+                <option value="both" selected>Target: Both</option>
+                <option value="A">Target: Solute A</option>
+                <option value="B">Target: Solute B</option>
+              </select>
             </div>
           </div>
         </div>
@@ -220,9 +229,14 @@
                 <h3>1D Concentration Profile <i>C(x)</i></h3>
                 <span class="chart-sub">Solid: Free Monomer | Shaded: Precipitate Crystals</span>
               </div>
-              <button id="btn-toggle-profile-scale" class="btn-mini-toggle" title="Toggle Y-axis scale between Auto-Fit and Log10">
-                <span id="profile-scale-label">Auto-Fit Y</span>
-              </button>
+              <div class="chart-btn-group">
+                <button id="btn-toggle-profile-quantity" class="btn-mini-toggle" title="Toggle between Concentration C(x) and Chemical Potential u(x) = C/K">
+                  <span id="profile-quantity-label">Plot: C(x)</span>
+                </button>
+                <button id="btn-toggle-profile-scale" class="btn-mini-toggle" title="Toggle Y-axis scale between Auto-Fit and Log10">
+                  <span id="profile-scale-label">Auto-Fit Y</span>
+                </button>
+              </div>
             </div>
             <div class="chart-container">
               <canvas id="profile-chart" width="500" height="250"></canvas>
@@ -230,9 +244,16 @@
           </div>
 
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Permeation Accumulation <i>J(t)</i></h3>
-              <span class="chart-sub">Receiver chamber solute accumulation over time</span>
+            <div class="chart-header justify-title">
+              <div>
+                <h3>Permeation Accumulation <i>J(t)</i></h3>
+                <span class="chart-sub">Receiver chamber solute accumulation over time</span>
+              </div>
+              <div class="chart-btn-group">
+                <button id="btn-toggle-flux-mode" class="btn-mini-toggle" title="Toggle between Cumulative Receiver Concentration C_rec(t) and Instantaneous Flux Rate J(t) = dC/dt">
+                  <span id="flux-mode-label">Mode: C_rec(t)</span>
+                </button>
+              </div>
             </div>
             <div class="chart-container">
               <canvas id="flux-chart" width="500" height="250"></canvas>
@@ -402,6 +423,21 @@
 
               <div class="control-item">
                 <div class="control-label-row">
+                  <label for="select-soluteA-shape">Molecular Shape &amp; Aspect Ratio (<i>p<sub>A</sub></i>)</label>
+                  <span id="val-soluteA-aspect" class="val-badge">Disc (p=2.4)</span>
+                </div>
+                <div class="shape-control-row">
+                  <select id="select-soluteA-shape" class="shape-select">
+                    <option value="sphere">⚪ Sphere (Isometric)</option>
+                    <option value="disc" selected>💿 Disc (Oblate Ring)</option>
+                    <option value="rod">🥖 Rod (Prolate Cylinder)</option>
+                  </select>
+                  <input type="range" id="slider-soluteA-aspect" min="1.0" max="5.0" step="0.1" value="2.4" />
+                </div>
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
                   <label for="slider-soluteA-hydration">Water Hydration Shell (Solvation)</label>
                   <span id="val-soluteA-hydration" class="val-badge">0.20</span>
                 </div>
@@ -479,6 +515,21 @@
                   <span id="val-soluteB-radius" class="val-badge">0.38 nm</span>
                 </div>
                 <input type="range" id="slider-soluteB-radius" min="0.15" max="2.50" step="0.05" value="0.38" />
+              </div>
+
+              <div class="control-item">
+                <div class="control-label-row">
+                  <label for="select-soluteB-shape">Molecular Shape &amp; Aspect Ratio (<i>p<sub>B</sub></i>)</label>
+                  <span id="val-soluteB-aspect" class="val-badge">Sphere (p=1.0)</span>
+                </div>
+                <div class="shape-control-row">
+                  <select id="select-soluteB-shape" class="shape-select">
+                    <option value="sphere" selected>⚪ Sphere (Isometric)</option>
+                    <option value="disc">💿 Disc (Oblate Ring)</option>
+                    <option value="rod">🥖 Rod (Prolate Cylinder)</option>
+                  </select>
+                  <input type="range" id="slider-soluteB-aspect" min="1.0" max="5.0" step="0.1" value="1.0" />
+                </div>
               </div>
 
               <div class="control-item">
